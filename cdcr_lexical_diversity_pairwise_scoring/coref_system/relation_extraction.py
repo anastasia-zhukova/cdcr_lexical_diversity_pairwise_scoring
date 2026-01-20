@@ -3,10 +3,10 @@ from enum import Enum
 
 
 class RelationTypeEnum(Enum):
-    NO_RELATION_FOUND = 0
-    EXACT_STRING = 1
-    SAME_HEAD_LEMMA = 2
-    PAIRWISE = 3
+    no_relation_found = 0
+    exact_string = 1
+    same_head_lemma = 2
+    pairwise = 3
 
 
 class RelationExtraction(object):
@@ -26,16 +26,6 @@ class RelationExtraction(object):
     def get_supported_relation(self):
         raise NotImplementedError()
 
-    @staticmethod
-    def get_extract_method(extract_method_str: str):
-        if extract_method_str == "pairwize":
-            return RelationTypeEnum.PAIRWISE
-        elif extract_method_str == "head_lemma":
-            return RelationTypeEnum.SAME_HEAD_LEMMA
-        elif extract_method_str == "exact_string":
-            return RelationTypeEnum.EXACT_STRING
-        raise ValueError("Extract method=" + extract_method_str + " not supported")
-
 
 class ExactStringRelationExtractor(RelationExtraction):
     def __init__(self):
@@ -47,7 +37,7 @@ class ExactStringRelationExtractor(RelationExtraction):
         return 1 if mention1_str.lower() == mention2_str.lower() else 0
 
     def get_supported_relation(self):
-        return RelationTypeEnum.EXACT_STRING
+        return RelationTypeEnum.exact_string
 
 
 class HeadLemmaRelationExtractor(RelationExtraction):
@@ -58,4 +48,4 @@ class HeadLemmaRelationExtractor(RelationExtraction):
         return 1 if mention_x.mention_head_lemma.lower() == mention_y.mention_head_lemma.lower() else 0
 
     def get_supported_relation(self):
-        return RelationTypeEnum.SAME_HEAD_LEMMA
+        return RelationTypeEnum.same_head_lemma
