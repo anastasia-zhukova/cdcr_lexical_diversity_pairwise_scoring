@@ -1,6 +1,7 @@
 import logging
 import pickle
 from itertools import combinations
+from pathlib import Path
 
 import enum
 import random
@@ -30,9 +31,13 @@ class DataSet(object):
         self.ratio = ratio
         self.name = name
 
-    def load_pos_neg_pickle(self, pos_file, neg_file):
-        pos_pairs = DataSet.load_pair_pickle(pos_file)
-        neg_pairs = DataSet.load_pair_pickle(neg_file)
+    def load_pos_neg_pickle(
+        self,
+        positive_pairs_path: Path,
+        negative_pairs_path: Path,
+    ):
+        pos_pairs = DataSet.load_pair_pickle(positive_pairs_path)
+        neg_pairs = DataSet.load_pair_pickle(negative_pairs_path)
 
         if self.ratio > 0:
             if len(neg_pairs) > (len(pos_pairs) * self.ratio):
@@ -43,11 +48,14 @@ class DataSet(object):
         return self.create_features_from_pos_neg(pos_pairs, neg_pairs)
 
     @staticmethod
-    def load_pair_pickle(neg_file):
-        logger.info("Loading file-" + neg_file)
-        neg_pairs = pickle.load(open(neg_file, "rb"))
-        logger.info("pairs loaded=" + str(len(neg_pairs)))
-        return neg_pairs
+    def load_pair_pickle(
+        pair_file_location: Path,
+    ):
+        logger.debug(f"Loading pairs file: {pair_file_location}")
+        with pair_file_location.open("rb") as file:
+            pairs = pickle.load(file)
+        logger.debug(f"Loaded {len(pairs)} pairs in total.")
+        return pairs
 
     @staticmethod
     def get_dataset(dataset_name: str, ratio=-1, split=Split.na):

@@ -21,6 +21,8 @@ Options:
 
 from datetime import datetime
 import logging
+from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import random
@@ -145,7 +147,18 @@ def run_inference(
     return all_labels, all_predictions
 
 
-def init_basic_training_resources() -> tuple[
+def init_basic_training_resources(
+    train_embeddings_path: Path,
+    dev_embeddings_path: Path,
+    dataset_type: Literal["wec", "ecb"],
+    train_positive_file_path: Path,
+    train_negative_file_path: Path,
+    dev_positive_file_path: Path,
+    dev_negative_file_path: Path,
+    ratio: int,
+    hidden_size: int,
+    use_cuda: bool,
+) -> tuple[
     ...,  # TODO
     ...,  # TODO
     PairWiseModelKenton,
@@ -154,45 +167,42 @@ def init_basic_training_resources() -> tuple[
     random.seed(1234)
     np.random.seed(1234)
 
-    embed_files = [_train_embed, _dev_embed]
-    embed_utils = EmbedFromFile(embed_files)
+    embed_utils = EmbedFromFile([train_embeddings_path, dev_embeddings_path])
+    pairwise_model = PairWiseModelKenton(embed_utils.embed_size, hidden_size, 1, embed_utils, use_cuda)
 
-    pairwize_model = PairWiseModelKenton(embed_utils.embed_size, _hidden_size, 1, embed_utils, _use_cuda)
-    train_dataset = DataSet.get_dataset(_dataset_arg, ratio=_ratio, split=Split.train)
-    dev_dataset = DataSet.get_dataset(_dataset_arg, split=Split.dev)
-    train_feat = train_dataset.load_pos_neg_pickle(_train_pos_file, _train_neg_file)
-    validation_feat = dev_dataset.load_pos_neg_pickle(_dev_pos_file, _dev_neg_file)
+    train_dataset = DataSet.get_dataset(dataset_type, ratio=ratio, split=Split.train)
+    dev_dataset = DataSet.get_dataset(dataset_type, split=Split.dev)
+    train_feat = train_dataset.load_pos_neg_pickle(train_positive_file_path, train_negative_file_path)
+    validation_feat = dev_dataset.load_pos_neg_pickle(dev_positive_file_path, dev_negative_file_path)
 
-    if _use_cuda:
+    if use_cuda:
         torch.cuda.manual_seed(1234)
-        pairwize_model.cuda()
+        pairwise_model.cuda()
 
-    return train_feat, validation_feat, pairwize_model
+    return train_feat, validation_feat, pairwise_model
 
 
-if __name__ == "__main__":
-    _arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
+def main(arguments):
     start_time = datetime.now()
     dt_string = start_time.strftime("%d%m%Y_%H%M%S")
-    print(_arguments)
     _output_folder = create_and_get_path("checkpoints/" + dt_string)
-    _batch_size = int(_arguments.get("--bs"))
-    _learning_rate = float(_arguments.get("--lr"))
-    _ratio = int(_arguments.get("--ratio"))
-    _iterations = int(_arguments.get("--itr"))
-    _use_cuda = True if _arguments.get("--cuda").lower() == "true" else False
-    _fine_tune = True if _arguments.get("--ft").lower() == "true" else False
-    _weight_decay = float(_arguments.get("--wd"))
-    _hidden_size = int(_arguments.get("--hidden"))
-    _dataset_arg = _arguments.get("--dataset")
+    _batch_size = int(arguments.get("--bs"))
+    _learning_rate = float(arguments.get("--lr"))
+    _ratio = int(arguments.get("--ratio"))
+    _iterations = int(arguments.get("--itr"))
+    _use_cuda = True if arguments.get("--cuda").lower() == "true" else False
+    _fine_tune = True if arguments.get("--ft").lower() == "true" else False
+    _weight_decay = float(arguments.get("--wd"))
+    _hidden_size = int(arguments.get("--hidden"))
+    _dataset_arg = arguments.get("--dataset")
 
-    _train_pos_file = _arguments.get("--tpf")
-    _train_neg_file = _arguments.get("--tnf")
-    _dev_pos_file = _arguments.get("--dpf")
-    _dev_neg_file = _arguments.get("--dnf")
-    _train_embed = _arguments.get("--te")
-    _dev_embed = _arguments.get("--de")
-    _model_file = _output_folder + "/" + _arguments.get("--mf")
+    _train_pos_file = arguments.get("--tpf")
+    _train_neg_file = arguments.get("--tnf")
+    _dev_pos_file = arguments.get("--dpf")
+    _dev_neg_file = arguments.get("--dnf")
+    _train_embed = arguments.get("--te")
+    _dev_embed = arguments.get("--de")
+    _model_file = _output_folder + "/" + arguments.get("--mf")
 
     log_params_str = (
         "ds_"
@@ -227,10 +237,21 @@ if __name__ == "__main__":
         + str(_weight_decay)
     )
 
-    _event_train_feat, _event_validation_feat, _pairwize_model = init_basic_training_resources()
+    _event_train_feat, _event_validation_feat, _pairwise_model = init_basic_training_resources(
+        train_embeddings_path=_train_embed,
+        dev_embeddings_path=_dev_embed,
+        dataset_type=_dataset_arg,
+        train_positive_file_path=_train_pos_file,
+        train_negative_file_path=_train_neg_file,
+        dev_positive_file_path=_dev_pos_file,
+        dev_negative_file_path=_dev_neg_file,
+        ratio=_ratio,
+        hidden_size=_hidden_size,
+        use_cuda=_use_cuda,
+    )
 
     train_pairwise(
-        _pairwize_model,
+        _pairwise_model,
         _event_train_feat,
         _event_validation_feat,
         _batch_size,
@@ -239,3 +260,8 @@ if __name__ == "__main__":
         model_out=_model_file,
         weight_decay=_weight_decay,
     )
+
+
+if __name__ == "__main__":
+    arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
+    main(arguments)

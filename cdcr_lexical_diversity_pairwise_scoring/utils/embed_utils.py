@@ -1,6 +1,7 @@
 import logging
 import pickle
 from typing import List
+from pathlib import Path
 
 import torch
 from transformers import RobertaTokenizer, RobertaModel
@@ -11,8 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmbedTransformersGenerics(object):
-    def __init__(self, max_surrounding_contx,
-                 finetune=False, use_cuda=True):
+    def __init__(self, max_surrounding_contx, finetune=False, use_cuda=True):
 
         self.model = RobertaModel.from_pretrained("roberta-large")
         # self.model = BertModel.from_pretrained("bert-large-cased")
@@ -59,8 +59,9 @@ class EmbedTransformersGenerics(object):
         return ret_context_before, ret_mention, ret_context_after
 
     def mention_feat_to_vec(self, mention):
-        cntx_before_str, ment_span_str, cntx_after_str = EmbedTransformersGenerics.\
-            extract_mention_surrounding_context(mention)
+        cntx_before_str, ment_span_str, cntx_after_str = EmbedTransformersGenerics.extract_mention_surrounding_context(
+            mention
+        )
 
         cntx_before, cntx_after = cntx_before_str, cntx_after_str
         if len(cntx_before_str) != 0:
@@ -70,9 +71,9 @@ class EmbedTransformersGenerics(object):
 
         if self.max_surrounding_contx != -1:
             if len(cntx_before) > self.max_surrounding_contx:
-                cntx_before = cntx_before[-self.max_surrounding_contx+1:]
+                cntx_before = cntx_before[-self.max_surrounding_contx + 1 :]
             if len(cntx_after) > self.max_surrounding_contx:
-                cntx_after = cntx_after[:self.max_surrounding_contx-1]
+                cntx_after = cntx_after[: self.max_surrounding_contx - 1]
 
         ment_span = self.tokenizer.encode(" ".join(ment_span_str), add_special_tokens=False)
 
@@ -95,17 +96,27 @@ class EmbedTransformersGenerics(object):
 
 
 class EmbedFromFile(object):
-    def __init__(self, files_to_load: List[str]):
+    def __init__(
+        self,
+        files_to_load: Path | List[Path],
+    ):
         """
         :param files_to_load: list of pre-generated embedding file names
         """
         self.embed_size = 1024
         bert_dict = dict()
 
-        if files_to_load is not None and len(files_to_load) > 0:
-            for file_ in files_to_load:
-                bert_dict.update(pickle.load(open(file_, "rb")))
-                logger.info("Bert representation loaded-" + file_)
+        if isinstance(files_to_load, Path):
+            files_to_load = [files_to_load]
+
+        if files_to_load is None or len(files_to_load) == 0:
+            raise ValueError
+
+        for single_file_path in files_to_load:
+            with single_file_path.open("rb") as file:
+                loaded_file = pickle.load(file)
+                bert_dict.update(loaded_file)
+            logger.info(f"Bert representation loaded from file: {single_file_path}")
 
         self.embeddings = list(bert_dict.values())
         self.embed_key = {k: i for i, k in enumerate(bert_dict.keys())}
