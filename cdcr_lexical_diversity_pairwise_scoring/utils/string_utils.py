@@ -4,7 +4,7 @@ import nltk
 import spacy
 from spacy.tokens import Doc
 
-from src.utils.io_utils import load_json_file
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import load_json_file
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 

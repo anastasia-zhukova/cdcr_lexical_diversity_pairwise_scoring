@@ -21,11 +21,11 @@ import random
 import torch
 from docopt import docopt
 
-from src.coref_system.relation_extraction import HeadLemmaRelationExtractor, RelationTypeEnum
-from src.coref_system.relation_extraction import RelationExtraction
-from src.dataobjs.dataset import TopicConfig
-from src.dataobjs.topics import Topics
-from src.utils.embed_utils import EmbedFromFile
+from cdcr_lexical_diversity_pairwise_scoring.coref_system.relation_extraction import HeadLemmaRelationExtractor, RelationTypeEnum
+from cdcr_lexical_diversity_pairwise_scoring.coref_system.relation_extraction import RelationExtraction
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import TopicConfig
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
+from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 
 logger = logging.getLogger(__name__)
 MAX_ALLOWED_BATCH_SIZE = 20000

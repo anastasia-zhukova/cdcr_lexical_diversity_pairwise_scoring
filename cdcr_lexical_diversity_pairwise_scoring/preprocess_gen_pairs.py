@@ -21,8 +21,8 @@ from os import path
 
 from docopt import docopt
 
-from src.dataobjs.dataset import Split, DataSet
-from src.dataobjs.topics import Topics
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, DataSet
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
 
 
 def generate_pairs():

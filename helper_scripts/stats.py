@@ -12,10 +12,10 @@ from collections import namedtuple, Counter
 from docopt import docopt
 from transformers import RobertaTokenizer
 
-from src.dataobjs.cluster import Clusters
-from src.dataobjs.mention_data import MentionData
-from src.utils.embed_utils import EmbedTransformersGenerics
-from src.utils.string_utils import StringUtils
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.cluster import Clusters
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
+from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedTransformersGenerics
+from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import StringUtils
 
 
 def count_verb_mentions(split_list):

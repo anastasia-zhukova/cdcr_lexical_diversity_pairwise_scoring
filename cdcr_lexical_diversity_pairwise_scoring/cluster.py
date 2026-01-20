@@ -17,10 +17,10 @@ import pickle
 
 from docopt import docopt
 
-from src.dataobjs.cluster import Clusters
-from src.dataobjs.topics import Topics
-from src.utils.clustering_utils import agglomerative_clustering
-from src.utils.io_utils import write_coref_scorer_results
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.cluster import Clusters
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
+from cdcr_lexical_diversity_pairwise_scoring.utils.clustering_utils import agglomerative_clustering
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import write_coref_scorer_results
 
 
 logger = logging.getLogger(__name__)

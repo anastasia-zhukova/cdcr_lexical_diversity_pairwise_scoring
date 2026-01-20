@@ -1,8 +1,8 @@
 import unittest
 
-from src.dataobjs.dataset import DataSet, Split
-from src.dataobjs.topics import TopicConfig
-from src.preprocess_gen_pairs import validate_pairs
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, Split
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import TopicConfig
+from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import validate_pairs
 
 
 class TestDataUtils(unittest.TestCase):

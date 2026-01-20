@@ -2,7 +2,7 @@ import logging
 import time
 
 from sklearn.cluster import AgglomerativeClustering
-from src.dataobjs.cluster import Clusters
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.cluster import Clusters
 
 logger = logging.getLogger(__name__)
 

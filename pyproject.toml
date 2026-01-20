@@ -1,0 +1,100 @@
+[project]
+name = "cdcr-lexical-diversity-pairwise-scoring"
+version = "0.1.0"
+description = ""
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Apache-2.0" }
+
+dependencies = [
+    "docopt==0.6.2",
+    "nltk==3.9.2",
+    "scikit-learn==1.8.0",
+    "spacy==3.8.11",
+    "torch==2.9.1",
+    "transformers==4.57.6",
+]
+
+[dependency-groups]
+dev = []
+
+[tool.isort]
+line_length = 120
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+no_lines_before = ["STDLIB", "LOCALFOLDER"]
+known_third_party = []
+multi_line_output = 3
+lines_after_imports = 2
+profile = "black"
+combine_as_imports = true
+
+[tool.black]
+line-length = 120
+target-version = ["py312"]
+
+[tool.ruff]
+fix = true
+exclude = [
+    ".git",
+    ".ruff_cache",
+    "venv",
+]
+line-length = 120
+target-version = "py312"
+cache-dir = "~/.cache/ruff"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "I",
+    "EM",
+    "FBT",
+    "TRY003",
+    "S101",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "G004",
+    "D107",
+    "D211",
+    "D213",
+    "FA102",
+    "ANN101",
+    "FIX002",
+    "TD002",
+    "TD003",
+    "S301", # We know this issue and there is no need for any reminders.
+    "N812", # There is a convention for some imports like functions being imported as F.
+    "N803", # Names like X is expected to be uppercase by convention.
+    "N806", # Names like X is expected to be uppercase by convention.
+    "PLR0913", # Sorry..?
+    "ANN401", # If I use typing.Any, I have a reason to do this.
+]
+
+fixable = ["ALL"]
+unfixable = ["F841"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

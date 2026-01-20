@@ -1,7 +1,7 @@
 import datetime
 import logging
 
-from src.utils.io_utils import create_and_get_path
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path
 
 
 def create_logger_with_fh(params_str=""):

@@ -6,7 +6,7 @@ import enum
 import random
 import re
 
-from src.dataobjs.topics import TopicConfig, Topics, Topic
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import TopicConfig, Topics, Topic
 
 
 logger = logging.getLogger(__name__)

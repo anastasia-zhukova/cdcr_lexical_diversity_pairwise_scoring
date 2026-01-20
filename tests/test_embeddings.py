@@ -2,8 +2,8 @@ import unittest
 
 import torch
 
-from src.dataobjs.mention_data import MentionData
-from src.utils.embed_utils import EmbedTransformersGenerics
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
+from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedTransformersGenerics
 
 
 class TestEmbeddings(unittest.TestCase):

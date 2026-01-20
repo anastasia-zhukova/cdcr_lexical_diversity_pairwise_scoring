@@ -1,7 +1,7 @@
 import unittest
 
-from src.dataobjs.mention_data import MentionData
-from src.utils.string_utils import StringUtils
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
+from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import StringUtils
 
 
 class TestMentions(unittest.TestCase):

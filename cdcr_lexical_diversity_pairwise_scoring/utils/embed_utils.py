@@ -5,7 +5,7 @@ from typing import List
 import torch
 from transformers import RobertaTokenizer, RobertaModel
 
-from src.dataobjs.mention_data import MentionData
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
 
 logger = logging.getLogger(__name__)
 

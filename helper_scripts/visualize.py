@@ -14,8 +14,8 @@ from heapq import heappush, heappop
 import spacy
 from docopt import docopt
 
-from src.dataobjs.mention_data import MentionData
-from src.dataobjs.topics import Topics
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
 
 
 class VisualCluster(object):

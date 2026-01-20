@@ -26,13 +26,13 @@ import random
 import torch
 
 from docopt import docopt
-from src.utils.embed_utils import EmbedFromFile
-from src.utils.eval_utils import get_confusion_matrix, get_prec_rec_f1
-from src.utils.log_utils import create_logger_with_fh
-from src.utils.io_utils import create_and_get_path
+from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
+from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, get_prec_rec_f1
+from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path
 
-from src.dataobjs.dataset import DataSet, Split
-from src.coref_system.pairwize_model import PairWiseModelKenton
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, Split
+from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwize_model import PairWiseModelKenton
 
 logger = logging.getLogger(__name__)
 

@@ -2,8 +2,8 @@ import logging
 import sys
 from typing import List
 
-from src.utils.io_utils import load_json_file
-from src.utils.string_utils import StringUtils
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import load_json_file
+from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import StringUtils
 
 logger = logging.getLogger(__name__)
 
