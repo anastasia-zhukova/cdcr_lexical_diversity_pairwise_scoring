@@ -14,76 +14,88 @@ Options:
 
 """
 
-import os
 import pickle
 import random
-from os import path
+from pathlib import Path
 
 from docopt import docopt
 
+from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, DataSet
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
 
 
-def generate_pairs():
-    positive_, negative_ = _dataset.get_pairwise_feat(_event_validation_file, to_topics=_topic_config)
+def generate_pairs(
+    event_validation_file: str,
+    dataset: DataSet,
+    topic_config: int,  # TODO: confit should not be presented as int.
+):
+    positive, negative = dataset.get_pairwise_feat(
+        data_file=event_validation_file,
+        to_topics=topic_config,
+    )
+    logger.debug(f"Created {len(positive)} positive pairs and {len(negative)} negative pairs.")
+    validate_pairs(positive, negative)
 
-    validate_pairs(positive_, negative_)
+    dirname = Path(event_validation_file).parent
+    basename = Path(event_validation_file).stem
 
-    basename = path.basename(path.splitext(_event_validation_file)[0])
-    dirname = os.path.dirname(_event_validation_file)
-    positive_file = dirname + "/" + basename + "_PosPairs.pickle"
-    negative_file = dirname + "/" + basename + "_NegPairs.pickle"
+    positive_file_path = dirname / f"{basename}_PosPairs.pickle"
+    with positive_file_path.open("wb") as file:
+        pickle.dump(positive, file)
+    logger.info(f"Saved positive pairs in {positive_file_path}.")
 
-    print("Positive Pairs=" + str(len(positive_)))
-    pickle.dump(positive_, open(positive_file, "w+b"))
-
-    print("Negative Pairs=" + str(len(negative_)))
-    pickle.dump(negative_, open(negative_file, "w+b"))
-
-    print("Done generating pairs for-" + _event_validation_file)
-    print("Positive File created in-" + positive_file)
-    print("Negative File created in-" + negative_file)
+    negative_file_path = dirname / f"{basename}_NegPairs.pickle"
+    with negative_file_path.open("wb") as file:
+        pickle.dump(negative, file)
+    logger.info(f"Saved negative pairs in {negative_file_path}.")
 
 
 def validate_pairs(pos_pairs, neg_pairs):
-    for men1, men2 in neg_pairs:
-        if men1.coref_chain == men2.coref_chain:
-            print("NEG BUG!!!!!!!!!!")
-
     for men1, men2 in pos_pairs:
         if men1.coref_chain != men2.coref_chain:
-            print("POS BUG!!!!!!!!!!")
+            raise ValueError("Error when validating positive pairs!")
 
-    print("Validation Passed!")
+    for men1, men2 in neg_pairs:
+        if men1.coref_chain == men2.coref_chain:
+            raise ValueError("Error when validating negative pairs!")
+
+    logger.info("Validation Passed!")
 
 
-if __name__ == '__main__':
-    arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
-    print(arguments)
-
+def main(arguments):
     _event_validation_file = arguments.get("<File>")
     _ratio = int(arguments.get("--ratio"))
     _split_arg = arguments.get("--split").lower()
-    if _split_arg in ["dev", "test"]:
-        _split = Split.Dev
-    elif _split_arg == "train":
-        _split = Split.Train
-    else:
-        _split = Split.NA
+    _topic_arg = arguments.get("--topic")
+    _dataset_arg = arguments.get("--dataset")
+
+    # TODO: raise error when not in train/dev/test?
+    split = Split[_split_arg]
 
     # subtopic/topic/corpus
-    _topic_arg = arguments.get("--topic")
-    _topic_config = Topics.get_topic_config(_topic_arg)
+    topic_config = Topics.get_topic_config(_topic_arg)
 
     random.seed(0)
+    dataset = DataSet.get_dataset(_dataset_arg, ratio=_ratio, split=split)
 
-    _dataset_arg = arguments.get("--dataset")
-    _dataset = DataSet.get_dataset(_dataset_arg, ratio=_ratio, split=_split)
+    if _dataset_arg == "wec" and split == Split.train and _ratio == -1:
+        logger.warning("Selected WEC dataset for train with a -1 ratio will generate all possible negative pairs!!")
 
-    if _dataset_arg == "wec" and _split == Split.Train and _ratio == -1:
-        print("Selected WEC dataset for train with a -1 ratio will generate all possible negative pairs!!")
+    logger.info("Generating pairs for file-/" + _event_validation_file)
+    generate_pairs(
+        event_validation_file=_event_validation_file,
+        dataset=dataset,
+        topic_config=topic_config,
+    )
 
-    print("Generating pairs for file-/" + _event_validation_file)
-    generate_pairs()
-    print("Process Done!")
+
+if __name__ == "__main__":
+    arguments = docopt(
+        __doc__,
+        argv=None,
+        help=True,
+        version=None,
+        options_first=False,
+    )
+    main(arguments)

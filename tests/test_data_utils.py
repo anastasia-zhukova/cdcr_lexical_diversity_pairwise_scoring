@@ -11,12 +11,12 @@ class TestDataUtils(unittest.TestCase):
         positive_, negative_ = dataset.get_pairwise_feat("tests/test_res/Event_gold_mentions.json", to_topics=TopicConfig.SubTopic)
         self.validate(dataset, negative_, positive_)
 
-        dataset = DataSet.get_dataset("wec", split=Split.Train, ratio=10)
+        dataset = DataSet.get_dataset("wec", split=Split.train, ratio=10)
         positive_, negative_ = dataset.get_pairwise_feat("tests/test_res/Event_gold_mentions.json")
         self.assertEqual(len(positive_) * 10, len(negative_))
         self.validate(dataset, negative_, positive_)
 
-        dataset = DataSet.get_dataset("wec", split=Split.Dev)
+        dataset = DataSet.get_dataset("wec", split=Split.dev)
         positive_, negative_ = dataset.get_pairwise_feat("tests/test_res/Event_gold_mentions.json")
         self.validate(dataset, negative_, positive_)
 

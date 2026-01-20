@@ -14,9 +14,10 @@ logger = logging.getLogger(__name__)
 
 # creating enumerations using class
 class Split(enum.Enum):
-    Dev = 1
-    Train = 2
-    NA = 3
+    dev = 1
+    test = dev
+    train = 2
+    na = 3
 
 
 class POLARITY(enum.Enum):
@@ -35,7 +36,7 @@ class DataSet(object):
 
         if self.ratio > 0:
             if len(neg_pairs) > (len(pos_pairs) * self.ratio):
-                neg_pairs = neg_pairs[0:len(pos_pairs) * self.ratio]
+                neg_pairs = neg_pairs[0 : len(pos_pairs) * self.ratio]
 
         logger.info("Final pos pairs-" + str(len(pos_pairs)))
         logger.info("Final neg pairs-" + str(len(neg_pairs)))
@@ -45,30 +46,30 @@ class DataSet(object):
     def load_pair_pickle(neg_file):
         logger.info("Loading file-" + neg_file)
         neg_pairs = pickle.load(open(neg_file, "rb"))
-        logger.info('pairs loaded=' + str(len(neg_pairs)))
+        logger.info("pairs loaded=" + str(len(neg_pairs)))
         return neg_pairs
 
     @staticmethod
-    def get_dataset(dataset_name: str, ratio=-1, split=Split.NA):
+    def get_dataset(dataset_name: str, ratio=-1, split=Split.na):
         if dataset_name == "ecb":
             return EcbDataSet(ratio=ratio)
         elif dataset_name == "wec":
             return WecDataSet(ratio=ratio, split=split)
         raise ValueError("Dataset name not supported-" + dataset_name)
 
-    def get_pairwise_feat(self, data_file, to_topics=TopicConfig.SubTopic):
+    def get_pairwise_feat(self, data_file: str, to_topics=TopicConfig.SubTopic):
         topics_ = Topics()
         topics_.create_from_file(data_file, keep_order=True)
-        logger.info('Create pos/neg examples')
+        logger.info("Create pos/neg examples")
         # Create positive and negative pair within the same ECB+ topic
         positive_, negative_ = self.create_pos_neg_pairs(topics_, to_topics)
 
         if self.ratio > 0:
             if len(negative_) > (len(positive_) * self.ratio):
-                negative_ = negative_[0:len(positive_) * self.ratio]
+                negative_ = negative_[0 : len(positive_) * self.ratio]
 
-        logger.info('pos-' + str(len(positive_)))
-        logger.info('neg-' + str(len(negative_)))
+        logger.info("pos-" + str(len(positive_)))
+        logger.info("neg-" + str(len(negative_)))
         return positive_, negative_
 
     @classmethod
@@ -76,7 +77,7 @@ class DataSet(object):
         raise NotImplementedError("Method implemented only in subclasses")
 
     def load_datasets(self, split_file):
-        logger.info('Create Features:' + self.name)
+        logger.info("Create Features:" + self.name)
         positive_, negative_ = self.get_pairwise_feat(split_file)
         split_feat = self.create_features_from_pos_neg(positive_, negative_)
         return split_feat
@@ -96,8 +97,8 @@ class DataSet(object):
         if mention1 is None or mention2 is None:
             return False
 
-        mentions_key1 = mention1.mention_id + '_' + mention2.mention_id
-        mentions_key2 = mention2.mention_id + '_' + mention1.mention_id
+        mentions_key1 = mention1.mention_id + "_" + mention2.mention_id
+        mentions_key2 = mention2.mention_id + "_" + mention1.mention_id
         if mentions_key1 not in _map and mentions_key2 not in _map:
             _pairs.append((mention1, mention2))
             _map[mentions_key1] = True
@@ -169,7 +170,7 @@ class EcbDataSet(DataSet):
 
 
 class WecDataSet(DataSet):
-    def __init__(self, ratio=-1, split=Split.NA, name="WEC"):
+    def __init__(self, ratio=-1, split=Split.na, name="WEC"):
         super(WecDataSet, self).__init__(name=name, ratio=ratio)
         self.split = split
 
@@ -187,7 +188,7 @@ class WecDataSet(DataSet):
         return EcbDataSet.create_pairs(topics, POLARITY.POSITIVE)
 
     def create_neg_pairs(self, topics):
-        if self.split == Split.Train:
+        if self.split == Split.train:
             clusters = topics.convert_to_clusters()
             negative_pairs = self.create_neg_pairs_wec(clusters)
         else:
