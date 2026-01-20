@@ -18,6 +18,7 @@ Options:
     --dataset=<d>   wec/ecb - which dataset to generate for [default: wec]
 
 """
+
 from datetime import datetime
 import logging
 
@@ -37,22 +38,30 @@ from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwize_model import 
 logger = logging.getLogger(__name__)
 
 
-def train_pairwise(pairwize_model, train, validation, batch_size, epochs=4,
-                   lr=1e-5, model_out=None, weight_decay=0.01):
-    # loss_func = torch.nn.CrossEntropyLoss()
+def train_pairwise(
+    pairwise_model: PairWiseModelKenton,
+    train,
+    validation,
+    batch_size: int,
+    epochs: int = 4,
+    lr: float = 1e-5,
+    model_out=None,
+    weight_decay: float = 0.01,
+):
     loss_func = torch.nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.Adam(pairwize_model.parameters(), lr, weight_decay=weight_decay)
-    # optimizer = AdamW(pairwize_model.parameters(), lr)
+    optimizer = torch.optim.Adam(pairwise_model.parameters(), lr, weight_decay=weight_decay)
     dataset_size = len(train)
 
     best_result_so_far = -1
 
     for epoch in range(epochs):
-        pairwize_model.train()
+        pairwise_model.train()
         end_index = batch_size
         random.shuffle(train)
 
-        cum_loss, count_btch = (0.0, 1)
+        cumulative_loss = 0.0
+        current_batch = 1
+        # TODO: rewrite using dataloader.
         for start_index in range(0, dataset_size, batch_size):
             if end_index > dataset_size:
                 end_index = dataset_size
@@ -61,73 +70,86 @@ def train_pairwise(pairwize_model, train, validation, batch_size, epochs=4,
 
             batch_features = train[start_index:end_index].copy()
             bs = end_index - start_index
-            prediction, gold_labels = pairwize_model(batch_features, bs)
+            prediction, gold_labels = pairwise_model(batch_features, bs)
 
             loss = loss_func(prediction, gold_labels.reshape(-1, 1).float())
             loss.backward()
             optimizer.step()
 
-            cum_loss += loss.item()
+            cumulative_loss += loss.item()
             end_index += batch_size
-            count_btch += 1
+            current_batch += 1
 
-            if count_btch % 100 == 0:
-                report = "%d: %d: loss: %.10f:" % (epoch + 1, end_index, cum_loss / count_btch)
+            if current_batch % 100 == 0:
+                report = "%d: %d: loss: %.10f:" % (epoch + 1, end_index, cumulative_loss / current_batch)
                 logger.info(report)
 
-        pairwize_model.eval()
-        # accuracy_on_dataset("Train", epoch + 1, pairwize_model, train)
-        _, _, _, dev_f1 = accuracy_on_dataset("Dev", epoch + 1, pairwize_model, validation)
-        # accuracy_on_dataset(accum_count_btch / 10000, embed_utils, pairwize_model, test, use_cuda)
-        pairwize_model.train()
+        pairwise_model.eval()
+        _, _, _, dev_f1 = accuracy_on_dataset("Dev", epoch + 1, pairwise_model, validation)
 
         if best_result_so_far < dev_f1:
             logger.info("Found better model saving")
-            torch.save(pairwize_model, model_out + "iter_" + str(epoch + 1))
+            torch.save(pairwise_model, model_out + "iter_" + str(epoch + 1))
             best_result_so_far = dev_f1
 
     return best_result_so_far
 
 
-def accuracy_on_dataset(testset, epoch, pairwize_model, features, batch_size=10000):
-    all_labels, all_predictions = run_inference(pairwize_model, features, batch_size=batch_size)
+def accuracy_on_dataset(
+    evaluation_set_name: str,
+    epoch: int,
+    pairwise_model: PairWiseModelKenton,
+    features,
+    batch_size: int = 10000,
+):
+    all_labels, all_predictions = run_inference(pairwise_model, features, batch_size=batch_size)
     accuracy = torch.mean((all_labels == all_predictions).float())
     tn, fp, fn, tp = get_confusion_matrix(all_labels, all_predictions)
     precision, recall, f1 = get_prec_rec_f1(tp, fp, fn)
 
-    logger.info("%s: %d: Accuracy: %.10f: precision: %.10f: recall: %.10f: f1: %.10f" % \
-                (testset + "-Acc", epoch, accuracy.item(), precision, recall, f1))
+    logger.info(
+        "%s: %d: Accuracy: %.10f: precision: %.10f: recall: %.10f: f1: %.10f"
+        % (evaluation_set_name + "-Acc", epoch, accuracy.item(), precision, recall, f1)
+    )
 
     return accuracy, precision, recall, f1
 
 
-def run_inference(pairwize_model, features, round_pred=True, batch_size=10000):
+def run_inference(
+    pairwise_model: PairWiseModelKenton,
+    features,
+    round_pred: bool = True,
+    batch_size: int = 10000,
+) -> tuple[torch.Tensor, torch.Tensor]:
     dataset_size = len(features)
-    end_index = batch_size
-    labels = list()
-    predictions = list()
-    for start_index in range(0, dataset_size, batch_size):
-        if end_index > dataset_size:
-            end_index = dataset_size
+    labels = []
+    predictions = []
 
+    for start_index in range(0, dataset_size, batch_size):
+        end_index = min(start_index + batch_size, dataset_size)
         batch_features = features[start_index:end_index].copy()
-        batch_size = end_index - start_index
-        batch_predictions, batch_label = pairwize_model.predict(batch_features, batch_size)
+        current_batch_size = end_index - start_index
+
+        # TODO: model should not work with real labels.
+        batch_predictions, batch_label = pairwise_model.predict(batch_features, current_batch_size)
 
         if round_pred:
             batch_predictions = torch.round(batch_predictions.reshape(-1)).long()
 
-        predictions.append(batch_predictions.detach())
-        labels.append(batch_label.detach())
-        end_index += batch_size
+        predictions.append(batch_predictions.detach().cpu())
+        labels.append(batch_label.detach().cpu())
 
-    all_labels = torch.cat(labels).cpu()
-    all_predictions = torch.cat(predictions).cpu()
+    all_labels = torch.cat(labels)
+    all_predictions = torch.cat(predictions)
 
     return all_labels, all_predictions
 
 
-def init_basic_training_resources():
+def init_basic_training_resources() -> tuple[
+    ...,  # TODO
+    ...,  # TODO
+    PairWiseModelKenton,
+]:
     torch.manual_seed(1234)
     random.seed(1234)
     np.random.seed(1234)
@@ -148,7 +170,7 @@ def init_basic_training_resources():
     return train_feat, validation_feat, pairwize_model
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     _arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
     start_time = datetime.now()
     dt_string = start_time.strftime("%d%m%Y_%H%M%S")
@@ -172,15 +194,48 @@ if __name__ == '__main__':
     _dev_embed = _arguments.get("--de")
     _model_file = _output_folder + "/" + _arguments.get("--mf")
 
-    log_params_str = "ds_" + _dataset_arg + "_lr_" + str(_learning_rate) + "_bs_" + str(_batch_size) + "_r" + \
-                     str(_ratio) + "_itr" + str(_iterations)
+    log_params_str = (
+        "ds_"
+        + _dataset_arg
+        + "_lr_"
+        + str(_learning_rate)
+        + "_bs_"
+        + str(_batch_size)
+        + "_r"
+        + str(_ratio)
+        + "_itr"
+        + str(_iterations)
+    )
+    # TODO: replace with simple logger.
     create_logger_with_fh(_output_folder + "/train_" + log_params_str)
 
-    logger.info("train_set=" + _dataset_arg + ", lr=" + str(_learning_rate) + ", bs=" + str(_batch_size) +
-                ", ratio=1:" + str(_ratio) + ", itr=" + str(_iterations) +
-                ", hidden_s=" + str(_hidden_size) + ", weight_decay=" + str(_weight_decay))
+    # TODO: prettify
+    logger.info(
+        "train_set="
+        + _dataset_arg
+        + ", lr="
+        + str(_learning_rate)
+        + ", bs="
+        + str(_batch_size)
+        + ", ratio=1:"
+        + str(_ratio)
+        + ", itr="
+        + str(_iterations)
+        + ", hidden_s="
+        + str(_hidden_size)
+        + ", weight_decay="
+        + str(_weight_decay)
+    )
 
     _event_train_feat, _event_validation_feat, _pairwize_model = init_basic_training_resources()
 
-    train_pairwise(_pairwize_model, _event_train_feat, _event_validation_feat, _batch_size,
-                   _iterations, _learning_rate, model_out=_model_file, weight_decay=_weight_decay)
+    train_pairwise(
+        _pairwize_model,
+        _event_train_feat,
+        _event_validation_feat,
+        _batch_size,
+        _iterations,
+        _learning_rate,
+        model_out=_model_file,
+        weight_decay=_weight_decay,
+    )
