@@ -8,6 +8,7 @@ license = { text = "Apache-2.0" }
 
 dependencies = [
     "docopt==0.6.2",
+    "loguru>=0.7.3",
     "nltk==3.9.2",
     "scikit-learn==1.8.0",
     "spacy==3.8.11",
