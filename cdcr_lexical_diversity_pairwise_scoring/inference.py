@@ -22,30 +22,35 @@ from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromF
 logger = logging.getLogger(__name__)
 
 
-if __name__ == "__main__":
-    _arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
-    print(_arguments)
-    _dataset_arg = _arguments.get("--dataset")
-    _model_in = _arguments.get("--mf")
-    _event_test_file_pos = _arguments.get("--tpf")
-    _event_test_file_neg = _arguments.get("--tnf")
-    _embed_file = _arguments.get("--te")
-    _use_cuda = True if _arguments.get("--cuda").lower() == "true" else False
+def main(arguments):
+    dataset_arg = arguments.get("--dataset")
+    model_file = arguments.get("--mf")
+    event_test_file_pos = arguments.get("--tpf")
+    event_test_file_neg = arguments.get("--tnf")
+    embed_file = arguments.get("--te")
+    use_cuda = True if arguments.get("--cuda").lower() == "true" else False
 
-    _dataset = EcbDataSet()
+    # TODO: only supports ECB?
+    dataset = EcbDataSet()
 
-    log_param_str = os.path.dirname(_model_in) + "/inference_" + ntpath.basename(_model_in)
+    # TODO: replace for better logger.
+    log_param_str = os.path.dirname(model_file) + "/inference_" + ntpath.basename(model_file)
     create_logger_with_fh(log_param_str)
 
-    logger.info("Loading the model from-" + _model_in)
-    _pairwize_model = torch.load(_model_in)
-    _embed_utils = EmbedFromFile([_embed_file])
-    _pairwize_model.set_embed_utils(_embed_utils)
-    _pairwize_model.eval()
+    logger.info(f"Loading the model from {model_file}")
+    pairwise_model = torch.load(model_file)
+    embed_utils = EmbedFromFile(embed_file)
+    pairwise_model.set_embed_utils(embed_utils)
+    pairwise_model.eval()
 
     # TODO: replace for Path
-    positive_ = _dataset.load_pair_pickle(_event_test_file_pos)
-    negative_ = _dataset.load_pair_pickle(_event_test_file_neg)
-    split_feat = _dataset.create_features_from_pos_neg(positive_, negative_)
+    positive_pairs = dataset.load_pair_pickle(event_test_file_pos)
+    negative_pairs = dataset.load_pair_pickle(event_test_file_neg)
+    split_feat = dataset.create_features_from_pos_neg(positive_pairs, negative_pairs)
 
-    accuracy_on_dataset("", 0, _pairwize_model, split_feat)
+    accuracy_on_dataset("", 0, pairwise_model, split_feat)
+
+
+if __name__ == "__main__":
+    arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
+    main(arguments)
