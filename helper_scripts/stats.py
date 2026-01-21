@@ -31,15 +31,17 @@ def calc_longest_mention_and_context(split_list):
     longest_mention = 0
     longest_context = 0
     for mention in split_list:
-        mention_encode = _tokenizer.encode(mention.mention_context[mention.tokens_number[0]:mention.tokens_number[-1] + 1])
+        mention_encode = _tokenizer.encode(
+            mention.mention_context[mention.tokens_number[0] : mention.tokens_number[-1] + 1]
+        )
         context_encode = EmbedTransformersGenerics.extract_mention_surrounding_context(mention)
         if len(mention_encode) > longest_mention:
             longest_mention = len(mention_encode)
         if len(mention.mention_context) > longest_context:
             longest_context = len(context_encode)
 
-    print('Longest mention span=' + str(longest_mention))
-    print('Longest_context=' + str(longest_context))
+    print("Longest mention span=" + str(longest_mention))
+    print("Longest_context=" + str(longest_context))
 
 
 def produce_cluster_stats(clusters):
@@ -49,7 +51,7 @@ def produce_cluster_stats(clusters):
     all_lemmas = list()
     all_lemmas_no_single = list()
     same_string_in_cluster = dict()
-    print('Clusters=' + str(len(clusters)))
+    print("Clusters=" + str(len(clusters)))
     biggest_cluster = 0
     for index, clust in enumerate(clusters.values()):
         clust_len = len(clust)
@@ -69,14 +71,22 @@ def produce_cluster_stats(clusters):
         sum_mentions += len(clust)
         all_lemmas.extend(clust_lemmas)
 
-    print('Singletons=' + str(singletons_count))
-    print('Non_singleton_Clusters=' + str(len(clusters) - singletons_count))
-    print('Biggest cluster=' + str(biggest_cluster))
-    print('Average Ment in Clust (include singletons)=' + str(sum_mentions / len(clusters)))
-    print('Average Ment in Clust (exclude singletons)=' + str(sum_mentions_no_single / (len(clusters) - singletons_count)))
-    print('Average Lemmas in Clust (Diversity-include singletons)=' + str(len(all_lemmas) / len(clusters)))
-    print('Average Lemmas in Clust (Diversity-exclude singletons)=' + str(len(all_lemmas_no_single) / (len(clusters) - singletons_count)))
-    print('Average Mentions with Same String in Clust=' + str(sum(same_string_in_cluster.values()) / (len(same_string_in_cluster))))
+    print("Singletons=" + str(singletons_count))
+    print("Non_singleton_Clusters=" + str(len(clusters) - singletons_count))
+    print("Biggest cluster=" + str(biggest_cluster))
+    print("Average Ment in Clust (include singletons)=" + str(sum_mentions / len(clusters)))
+    print(
+        "Average Ment in Clust (exclude singletons)=" + str(sum_mentions_no_single / (len(clusters) - singletons_count))
+    )
+    print("Average Lemmas in Clust (Diversity-include singletons)=" + str(len(all_lemmas) / len(clusters)))
+    print(
+        "Average Lemmas in Clust (Diversity-exclude singletons)="
+        + str(len(all_lemmas_no_single) / (len(clusters) - singletons_count))
+    )
+    print(
+        "Average Mentions with Same String in Clust="
+        + str(sum(same_string_in_cluster.values()) / (len(same_string_in_cluster)))
+    )
 
 
 def calc_single_head_lemma_cluster(ment_list, clus_size_thresh):
@@ -105,10 +115,10 @@ def calc_single_head_lemma_cluster(ment_list, clus_size_thresh):
 
 
 def calc_dist_lemmas_cross(split_list):
-    print('Mentions=' + str(len(split_list)))
+    print("Mentions=" + str(len(split_list)))
     mention_length_sum = sum([len(ment.tokens_number) for ment in split_list])
     average_length = mention_length_sum / len(split_list)
-    print('Average Ment Length (tokens)=' + str(average_length))
+    print("Average Ment Length (tokens)=" + str(average_length))
 
     distinct_lemmas = dict()
     distinct_lemmas_cross = dict()
@@ -116,17 +126,21 @@ def calc_dist_lemmas_cross(split_list):
         if mention.mention_head_lemma.lower() not in distinct_lemmas:
             distinct_lemmas[mention.mention_head_lemma.lower()] = mention
 
-        lem_id = mention.mention_head_lemma.lower() + '_' + ''.join(filter(lambda i: i.isdigit(), str(mention.topic_id)))
+        lem_id = (
+            mention.mention_head_lemma.lower() + "_" + "".join(filter(lambda i: i.isdigit(), str(mention.topic_id)))
+        )
         if lem_id not in distinct_lemmas_cross:
             distinct_lemmas_cross[lem_id] = set()
         distinct_lemmas_cross[lem_id].add(mention.coref_chain)
 
     sum_cross_clust_lem = sum([1 for clust_set in distinct_lemmas_cross.values() if len(clust_set) > 1])
-    avg_cross_clust_lem = sum([len(clust_set) for clust_set in distinct_lemmas_cross.values()]) / len(distinct_lemmas_cross)
+    avg_cross_clust_lem = sum([len(clust_set) for clust_set in distinct_lemmas_cross.values()]) / len(
+        distinct_lemmas_cross
+    )
 
-    print('Distinct Lemmas in corpus=' + str(len(distinct_lemmas)))
-    print('Distinct Lemmas across clusters=' + str(sum_cross_clust_lem))
-    print('Avg num of clusters with same Lemma(Ambiguity)=' + str(avg_cross_clust_lem))
+    print("Distinct Lemmas in corpus=" + str(len(distinct_lemmas)))
+    print("Distinct Lemmas across clusters=" + str(sum_cross_clust_lem))
+    print("Avg num of clusters with same Lemma(Ambiguity)=" + str(avg_cross_clust_lem))
     print()
 
     count_verb_mentions(split_list)
@@ -176,14 +190,14 @@ def generate_pair_score(f):
 def create_split_stats():
     mentions_list = MentionData.read_mentions_json_to_mentions_data_list(_mention_file)
     if mentions_list:
-        print('############# ' + _mention_file + ' ###################')
+        print("############# " + _mention_file + " ###################")
         calc_dist_lemmas_cross(mentions_list)
         calc_longest_mention_and_context(mentions_list)
         cross_doc_clusters(mentions_list)
         calc_single_head_lemma_cluster(mentions_list, 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     _arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
     print(_arguments)
     _mention_file = _arguments.get("<MentionsFile>")

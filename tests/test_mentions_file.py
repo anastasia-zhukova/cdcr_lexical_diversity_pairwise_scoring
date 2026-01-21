@@ -7,7 +7,7 @@ from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import StringUti
 class TestMentions(unittest.TestCase):
     def test_mention_span_align(self):
         mentions = list()
-        mentions.extend(MentionData.read_mentions_json_to_mentions_data_list('tests/test_res/Event_gold_mentions.json'))
+        mentions.extend(MentionData.read_mentions_json_to_mentions_data_list("tests/test_res/Event_gold_mentions.json"))
         for mention in mentions:
             for i, tok_id in enumerate(mention.tokens_number):
                 mention_text = list(zip(*StringUtils.get_tokenized_string(mention.tokens_str)))[0]
@@ -17,5 +17,5 @@ class TestMentions(unittest.TestCase):
         print("Test test_mention_span Passed!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

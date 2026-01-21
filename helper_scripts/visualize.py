@@ -49,7 +49,7 @@ def print_num_of_mentions_in_cluster(clusters):
     print_dict = dict(sorted(bucket.items()))
 
     for key, value in print_dict.items():
-        print(str(key) + ': ' + str(value))
+        print(str(key) + ": " + str(value))
 
 
 def visualize_mentions():
@@ -71,20 +71,16 @@ def visualize_mentions():
         for mention in mentions:
             context, start, end = get_context_start_end(mention)
             label = mention.mention_id
-            ents.append({'start': start, 'end': end + 1, 'label': label})
+            ents.append({"start": start, "end": end + 1, "label": label})
 
         if _sample < 0 or 0 < sampled <= _sample:
             sampled += 1
             if ents:
-                dispacy_obj.append({
-                    'text': context,
-                    'ents': ents,
-                    'title': doc_id
-                })
+                dispacy_obj.append({"text": context, "ents": ents, "title": doc_id})
         else:
             break
 
-    spacy.displacy.serve(dispacy_obj, style='ent', manual=True)
+    spacy.displacy.serve(dispacy_obj, style="ent", manual=True)
 
 
 def visualize_clusters():
@@ -118,22 +114,19 @@ def visualize_clusters():
                 real_start = len(cluster_context) + 1 + ment_pair[0]
                 real_end = len(cluster_context) + 1 + ment_pair[1]
                 ent_label = ment_pair[2]
-                ents.append({'start': real_start, 'end': real_end, 'label': ent_label})
+                ents.append({"start": real_start, "end": real_end, "label": ent_label})
 
-            cluster_context = cluster_context + '\n' + context
+            cluster_context = cluster_context + "\n" + context
 
         if cluster_ments_count > 0 and (_sample < 0 or 0 < sampled <= _sample):
             sampled += 1
-            clust_title = 'Cluster(' + str(clusters[cluster_id][0].coref_chain) + \
-                          '), Mentions(' + str(len(cluster_ments)) + ')'
+            clust_title = (
+                "Cluster(" + str(clusters[cluster_id][0].coref_chain) + "), Mentions(" + str(len(cluster_ments)) + ")"
+            )
 
-            dispacy_obj.append({
-                'text': cluster_context,
-                'ents': ents,
-                'title': clust_title
-            })
+            dispacy_obj.append({"text": cluster_context, "ents": ents, "title": clust_title})
 
-    spacy.displacy.serve(dispacy_obj, style='ent', manual=True)
+    spacy.displacy.serve(dispacy_obj, style="ent", manual=True)
 
 
 def get_context_start_end(mention):
@@ -147,7 +140,7 @@ def get_context_start_end(mention):
         if i == 0:
             context = mention.mention_context[i]
         else:
-            context = context + ' ' + mention.mention_context[i]
+            context = context + " " + mention.mention_context[i]
 
         if i == int(mention.tokens_number[-1]):
             end = len(context)
@@ -155,7 +148,7 @@ def get_context_start_end(mention):
     return context, start, end
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
     print(arguments)
     _event_file = arguments.get("<MentionsFile>")

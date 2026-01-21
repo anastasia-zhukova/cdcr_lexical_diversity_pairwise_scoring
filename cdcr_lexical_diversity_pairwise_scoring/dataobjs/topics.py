@@ -54,7 +54,7 @@ class Topics(object):
 
         self.topics_dict = self.order_mentions_by_topics(mentions)
 
-    def order_mentions_by_topics(self, mentions: str) -> Dict[str, Topic]:
+    def order_mentions_by_topics(self, mentions: list[dict]) -> Dict[str, Topic]:
         """
         Order mentions to documents topics
         Args:
@@ -66,7 +66,7 @@ class Topics(object):
         running_index = 0
         topics = dict()
         for mention_line in mentions:
-            mention = MentionData.read_json_mention_data_line(mention_line)
+            mention = MentionData._read_json_mention_data_line(mention_line)
 
             if self.keep_order:
                 if mention.mention_index == -1:
