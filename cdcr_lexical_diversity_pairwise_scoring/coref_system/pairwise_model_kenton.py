@@ -7,7 +7,7 @@ class PairwiseModelKenton(nn.Module):
     def __init__(self, f_in_dim, f_hid_dim, f_out_dim, embed_utils, use_cuda):
         super(PairwiseModelKenton, self).__init__()
         self.W = nn.Linear(f_hid_dim, f_out_dim)
-        self.pairwize = self.get_sequential(9 * f_in_dim, f_hid_dim)
+        self.pairwise = self.get_sequential(9 * f_in_dim, f_hid_dim)
         self.attend = self.get_sequential(embed_utils.get_embed_size(), f_hid_dim)
         self.w_alpha = nn.Linear(f_hid_dim, 1)
         self.embed_utils = embed_utils
@@ -24,7 +24,7 @@ class PairwiseModelKenton(nn.Module):
 
     def forward(self, batch_features, bs):
         embeded_features, gold_labels = self.get_bert_rep(batch_features, bs)
-        prediction = self.W(self.pairwize(embeded_features))
+        prediction = self.W(self.pairwise(embeded_features))
         return prediction, gold_labels
 
     def predict(self, batch_features, bs):
