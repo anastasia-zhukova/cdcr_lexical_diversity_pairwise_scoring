@@ -35,13 +35,13 @@ from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logge
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path
 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, Split
-from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwize_model import PairWiseModelKenton
+from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
 
 logger = logging.getLogger(__name__)
 
 
 def train_pairwise(
-    pairwise_model: PairWiseModelKenton,
+    pairwise_model: PairwiseModelKenton,
     train,
     validation,
     batch_size: int,
@@ -100,7 +100,7 @@ def train_pairwise(
 def accuracy_on_dataset(
     evaluation_set_name: str,
     epoch: int,
-    pairwise_model: PairWiseModelKenton,
+    pairwise_model: PairwiseModelKenton,
     features,
     batch_size: int = 10000,
 ):
@@ -118,7 +118,7 @@ def accuracy_on_dataset(
 
 
 def run_inference(
-    pairwise_model: PairWiseModelKenton,
+    pairwise_model: PairwiseModelKenton,
     features,
     round_pred: bool = True,
     batch_size: int = 10000,
@@ -161,14 +161,14 @@ def init_basic_training_resources(
 ) -> tuple[
     ...,  # TODO
     ...,  # TODO
-    PairWiseModelKenton,
+    PairwiseModelKenton,
 ]:
     torch.manual_seed(1234)
     random.seed(1234)
     np.random.seed(1234)
 
     embed_utils = EmbedFromFile([train_embeddings_path, dev_embeddings_path])
-    pairwise_model = PairWiseModelKenton(embed_utils.embed_size, hidden_size, 1, embed_utils, use_cuda)
+    pairwise_model = PairwiseModelKenton(embed_utils.embed_size, hidden_size, 1, embed_utils, use_cuda)
 
     train_dataset = DataSet.get_dataset(dataset_type, ratio=ratio, split=Split.train)
     dev_dataset = DataSet.get_dataset(dataset_type, split=Split.dev)

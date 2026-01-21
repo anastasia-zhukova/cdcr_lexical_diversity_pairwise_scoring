@@ -21,7 +21,7 @@ import torch
 from docopt import docopt
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwize_model import PairWiseModelKenton
+from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
 from cdcr_lexical_diversity_pairwise_scoring.coref_system.relation_extraction import (
     HeadLemmaRelationExtractor,
     RelationTypeEnum,
@@ -34,7 +34,7 @@ MAX_ALLOWED_BATCH_SIZE = 20000
 
 
 def generate_prediction_matrix(
-    model: PairWiseModelKenton | HeadLemmaRelationExtractor,
+    model: PairwiseModelKenton | HeadLemmaRelationExtractor,
     topic,
 ):
     all_pairs = list(product(topic.mentions, repeat=2))
@@ -55,7 +55,7 @@ def generate_prediction_matrix(
 
 def predict_and_save(
     event_topics: Topics,
-    model: PairWiseModelKenton | HeadLemmaRelationExtractor,
+    model: PairwiseModelKenton | HeadLemmaRelationExtractor,
     output_file: Path,
 ):
     all_predictions = []

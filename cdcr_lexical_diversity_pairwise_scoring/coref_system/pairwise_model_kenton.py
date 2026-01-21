@@ -3,9 +3,9 @@ import torch
 from torch import nn
 
 
-class PairWiseModelKenton(nn.Module):
+class PairwiseModelKenton(nn.Module):
     def __init__(self, f_in_dim, f_hid_dim, f_out_dim, embed_utils, use_cuda):
-        super(PairWiseModelKenton, self).__init__()
+        super(PairwiseModelKenton, self).__init__()
         self.W = nn.Linear(f_hid_dim, f_out_dim)
         self.pairwize = self.get_sequential(9 * f_in_dim, f_hid_dim)
         self.attend = self.get_sequential(embed_utils.get_embed_size(), f_hid_dim)
@@ -96,13 +96,13 @@ class PairWiseModelKenton(nn.Module):
             if val1 > max_mention_span or val2 > max_mention_span:
                 raise Exception("Mention size exceed maximum!")
 
-            attend1_fx = attend1[i:i + 1, 0:val1]
+            attend1_fx = attend1[i : i + 1, 0:val1]
             attend1_fx = torch.nn.functional.pad(attend1_fx, [0, max_mention_span - val1, 0, 0], value=-math.inf)
-            attend1[i:i + 1] = attend1_fx
+            attend1[i : i + 1] = attend1_fx
 
-            attend2_fx = attend2[i:i + 1, 0:val2]
+            attend2_fx = attend2[i : i + 1, 0:val2]
             attend2_fx = torch.nn.functional.pad(attend2_fx, [0, max_mention_span - val2, 0, 0], value=-math.inf)
-            attend2[i:i + 1] = attend2_fx
+            attend2[i : i + 1] = attend2_fx
 
     @staticmethod
     def get_gold_labels(batch_features):
