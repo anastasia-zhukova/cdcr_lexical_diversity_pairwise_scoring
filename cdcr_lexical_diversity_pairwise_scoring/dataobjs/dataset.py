@@ -65,7 +65,7 @@ class DataSet(object):
             return WecDataSet(ratio=ratio, split=split)
         raise ValueError("Dataset name not supported-" + dataset_name)
 
-    def get_pairwise_feat(self, data_file: str, to_topics=TopicConfig.SubTopic):
+    def get_pairwise_feat(self, data_file: str, to_topics=TopicConfig.subtopic):
         topics_ = Topics()
         topics_.create_from_file(data_file, keep_order=True)
         logger.info("Create pos/neg examples")
@@ -121,9 +121,9 @@ class EcbDataSet(DataSet):
 
     @classmethod
     def create_pos_neg_pairs(cls, topics, to_topic):
-        if to_topic == TopicConfig.Topic:
+        if to_topic == TopicConfig.topic:
             topics = cls.from_ecb_subtopic_to_topic(topics)
-        elif to_topic == TopicConfig.Corpus:
+        elif to_topic == TopicConfig.corpus:
             topics.to_single_topic()
 
         # create positive examples
@@ -183,7 +183,7 @@ class WecDataSet(DataSet):
         self.split = split
 
     def create_pos_neg_pairs(self, topics, sub_topics):
-        if sub_topics == TopicConfig.Corpus:
+        if sub_topics == TopicConfig.corpus:
             topics.to_single_topic()
 
         positive_pairs = WecDataSet.create_pos_pairs(topics)

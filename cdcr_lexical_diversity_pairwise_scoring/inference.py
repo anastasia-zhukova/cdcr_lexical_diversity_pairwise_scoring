@@ -22,7 +22,7 @@ from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromF
 logger = logging.getLogger(__name__)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     _arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
     print(_arguments)
     _dataset_arg = _arguments.get("--dataset")
@@ -43,6 +43,7 @@ if __name__ == '__main__':
     _pairwize_model.set_embed_utils(_embed_utils)
     _pairwize_model.eval()
 
+    # TODO: replace for Path
     positive_ = _dataset.load_pair_pickle(_event_test_file_pos)
     negative_ = _dataset.load_pair_pickle(_event_test_file_neg)
     split_feat = _dataset.create_features_from_pos_neg(positive_, negative_)

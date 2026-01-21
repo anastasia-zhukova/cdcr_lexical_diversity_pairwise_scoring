@@ -22,7 +22,7 @@ from docopt import docopt
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, DataSet
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import TopicConfig
 
 
 def generate_pairs(
@@ -73,8 +73,7 @@ def main(arguments):
     # TODO: raise error when not in train/dev/test?
     split = Split[_split_arg]
 
-    # subtopic/topic/corpus
-    topic_config = Topics.get_topic_config(_topic_arg)
+    topic_config = TopicConfig[_topic_arg]
 
     random.seed(0)
     dataset = DataSet.get_dataset(_dataset_arg, ratio=_ratio, split=split)

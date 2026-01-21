@@ -1,18 +1,19 @@
-import enum
+from enum import IntEnum
+import json
 import logging
 from typing import Dict
+from pathlib import Path
 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import load_mentions_from_json_file
 
 
 logger = logging.getLogger(__name__)
 
 
-class TopicConfig(enum.Enum):
-    SubTopic = 1,
-    Topic = 2,
-    Corpus = 3
+class TopicConfig(IntEnum):
+    subtopic = 1
+    topic = 2
+    corpus = 3
 
 
 class Topic(object):
@@ -36,7 +37,11 @@ class Topics(object):
             return self.topics_dict[id_to_search]
         return None
 
-    def create_from_file(self, mentions_file_path: str, keep_order: bool = True) -> None:
+    def create_from_file(
+        self,
+        mentions_file_path: Path,
+        keep_order: bool = True,
+    ) -> None:
         """
 
         Args:
@@ -44,7 +49,9 @@ class Topics(object):
             mentions_file_path: this topic mentions json file
         """
         self.keep_order = keep_order
-        mentions = load_mentions_from_json_file(mentions_file_path)
+        with mentions_file_path.open("r", encoding="utf-8") as file:
+            mentions = json.load(file)
+
         self.topics_dict = self.order_mentions_by_topics(mentions)
 
     def order_mentions_by_topics(self, mentions: str) -> Dict[str, Topic]:
@@ -83,7 +90,7 @@ class Topics(object):
                 new_topic.mentions.append(ment)
 
         self.topics_dict.clear()
-        self.topics_dict['-1'] = new_topic
+        self.topics_dict["-1"] = new_topic
 
     def convert_to_clusters(self):
         clusters = dict()
@@ -94,13 +101,3 @@ class Topics(object):
                 clusters[mention.coref_chain].append(mention)
             # break
         return clusters
-
-    @staticmethod
-    def get_topic_config(topic_arg: str):
-        if topic_arg == "subtopic":
-            topic_config = TopicConfig.SubTopic
-        elif topic_arg == "topic":
-            topic_config = TopicConfig.Topic
-        else:
-            topic_config = TopicConfig.Corpus
-        return topic_config

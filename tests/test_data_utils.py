@@ -8,7 +8,9 @@ from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import validat
 class TestDataUtils(unittest.TestCase):
     def test_pairs_file(self):
         dataset = DataSet.get_dataset("ecb")
-        positive_, negative_ = dataset.get_pairwise_feat("tests/test_res/Event_gold_mentions.json", to_topics=TopicConfig.SubTopic)
+        positive_, negative_ = dataset.get_pairwise_feat(
+            "tests/test_res/Event_gold_mentions.json", to_topics=TopicConfig.subtopic
+        )
         self.validate(dataset, negative_, positive_)
 
         dataset = DataSet.get_dataset("wec", split=Split.train, ratio=10)
@@ -37,5 +39,5 @@ class TestDataUtils(unittest.TestCase):
         print("Test Passed!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
