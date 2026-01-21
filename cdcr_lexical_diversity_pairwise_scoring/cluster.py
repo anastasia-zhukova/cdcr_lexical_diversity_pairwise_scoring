@@ -11,43 +11,49 @@ Options:
     --alt=<AverageLinkThresh>               The link threshold for the clustering algorithm [default: 0.7]
 """
 
-import logging
-
 import pickle
+from typing import Callable
+from pathlib import Path
 
 from docopt import docopt
 
+from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.cluster import Clusters
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
 from cdcr_lexical_diversity_pairwise_scoring.utils.clustering_utils import agglomerative_clustering
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import write_coref_scorer_results
 
 
-logger = logging.getLogger(__name__)
+def cluster_and_print(
+    predictions: list,
+    average_link_threshold: float,
+    print_method: Callable,
+    scorer_file_path: Path,
+):
+    all_mentions = []
+    logger.info(f"Running event coref resolution for {average_link_threshold=}")
+    for topic, pred in predictions:
+        logger.info(f"Evaluating Topic No {topic.topic_id}")
+        all_mentions.extend(agglomerative_clustering(pred, topic, average_link_threshold))
+    logger.info(f"Generating scorer file {scorer_file_path}")
+    print_method(all_mentions, scorer_file_path)
 
 
-def cluster_and_print():
-    all_mentions = list()
-    logger.info('Running event coref resolution for average_link_thresh=' + str(_average_link_thresh))
-    for topic, pred in _predictions:
-        logger.info("Evaluating Topic No:" + str(topic.topic_id))
-        all_mentions.extend(agglomerative_clustering(pred, topic, _average_link_thresh))
-    logger.info("Generating scorer file-" + _scorer_file)
-    _print_method(all_mentions, _scorer_file)
-
-
-def print_results(all_mentions, scorer_out_file):
+def print_results(
+    all_mentions: list,
+):
     all_clusters = Clusters.from_mentions_to_predicted_clusters(all_mentions)
     for cluster_id, cluster in all_clusters.items():
-        if 'Singleton' in cluster[0].coref_chain and len(cluster) == 1:
+        # TODO: what is meant here by "singleton"? no such string is present in the whole project.
+        if "Singleton" in cluster[0].coref_chain and len(cluster) == 1:
             continue
 
-        print('\n\t## Cluster=' + str(cluster_id) + " ##")
+        print("\n\t## Cluster=" + str(cluster_id) + " ##")
         for mention in cluster:
             mentions_dict = dict()
-            mentions_dict['id'] = mention.mention_id
-            mentions_dict['text'] = mention.tokens_str
-            mentions_dict['gold'] = mention.coref_chain
+            mentions_dict["id"] = mention.mention_id
+            mentions_dict["text"] = mention.tokens_str
+            mentions_dict["gold"] = mention.coref_chain
 
             if mention.tokens_number[0] >= 10 and (mention.tokens_number[-1] + 10) < len(mention.mention_context):
                 id_start = mention.tokens_number[0] - 10
@@ -62,35 +68,45 @@ def print_results(all_mentions, scorer_out_file):
                 id_start = 0
                 id_end = len(mention.mention_context)
 
-            before = " ".join(mention.mention_context[id_start:mention.tokens_number[0]])
-            after = " ".join(mention.mention_context[mention.tokens_number[-1] + 1:id_end])
+            before = " ".join(mention.mention_context[id_start : mention.tokens_number[0]])
+            after = " ".join(mention.mention_context[mention.tokens_number[-1] + 1 : id_end])
             mention_txt = " <" + mention.tokens_str + "> "
-            mentions_dict['context'] = before + mention_txt + after
+            mentions_dict["context"] = before + mention_txt + after
 
-            print('\t\tMentions='+ str(mentions_dict))
+            print("\t\tMentions=" + str(mentions_dict))
 
 
 def print_scorer_results(all_mentions, scorer_out_file):
     write_coref_scorer_results(all_mentions, scorer_out_file)
 
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    _arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
-    print(_arguments)
-    _mentions_file = _arguments.get("--tmf")
-    _predictions_file = _arguments.get("--predictions")
-    _average_link_thresh = float(_arguments.get("--alt"))
-    _print_method_arg = _arguments.get("--print")
+def main(arguments):
+    _mentions_file = arguments.get("--tmf")
+    _predictions_file = arguments.get("--predictions")
+    _average_link_thresh = float(arguments.get("--alt"))
+    _print_method_arg = arguments.get("--print")
     _scorer_file = _predictions_file + "_" + str(_average_link_thresh)
-    _predictions = pickle.load(open(_predictions_file, "rb"))
 
-    _event_topics = Topics()
-    _event_topics.create_from_file(_mentions_file, True)
+    with _predictions_file.open("rb") as file:
+        predictions = pickle.load(file)
 
+    event_topics = Topics()
+    event_topics.create_from_file(_mentions_file, True)
+
+    # TODO: one is printing, the other one is saving to file.
     if _print_method_arg == "readable":
-        _print_method = print_results
+        print_method = print_results
     else:
-        _print_method = print_scorer_results
+        print_method = print_scorer_results
 
-    cluster_and_print()
+    cluster_and_print(
+        predictions=predictions,
+        average_link_threshold=_average_link_thresh,
+        print_method=print_method,
+        scorer_file_path=_scorer_file,
+    )
+
+
+if __name__ == "__main__":
+    arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
+    main(arguments)
