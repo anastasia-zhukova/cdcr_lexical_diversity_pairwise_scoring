@@ -1,6 +1,6 @@
 import json
-from typing import List, Literal
 from pathlib import Path
+from typing import Literal
 
 from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import SpacySyntaxAnalyzer
 
@@ -12,9 +12,9 @@ class MentionData:
         topic_id: str,
         doc_id: str,
         sent_id: int,
-        tokens_numbers: List[int],
+        tokens_numbers: list[int],
         tokens_str: str,
-        mention_context: List[str],
+        mention_context: list[str],
         mention_head: str,
         mention_head_lemma: str,
         coref_chain: str,
@@ -26,8 +26,7 @@ class MentionData:
         mention_index: int = -1,
         gen_lemma: bool = False,
     ) -> None:
-        """
-        Object represent a mention
+        """Object represent a mention
 
         Args:
             topic_id: str topic ID
@@ -41,8 +40,8 @@ class MentionData:
             mention_pos: str
             mention_ner: str
             mention_index: in case order is of value (default = -1)
-        """
 
+        """
         self.tokens_str = tokens_str
         self.mention_context = mention_context
         if not mention_head and not mention_head_lemma:
@@ -94,7 +93,7 @@ class MentionData:
 
         if mention_head is None or mention_head_lemma is None:
             mention_head, mention_head_lemma, mention_pos, mention_ner = SpacySyntaxAnalyzer.find_head_lemma_pos_ner(
-                str(mention_text)
+                str(mention_text),
             )
 
         mention_data = cls(
@@ -130,13 +129,12 @@ class MentionData:
         cls,
         mentions_json_file: Path,
     ) -> list["MentionData"]:
-        """
-
-        Args:
+        """Args:
             mentions_json_file: the path of the mentions json file to read
 
         Returns:
             List[MentionData]
+
         """
         with mentions_json_file.open("r", encoding="utf-8") as file:
             all_mentions_only = json.load(file)

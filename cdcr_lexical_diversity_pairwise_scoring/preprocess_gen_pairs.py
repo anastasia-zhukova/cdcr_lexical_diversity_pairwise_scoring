@@ -1,6 +1,4 @@
-"""
-
-Usage:
+"""Usage:
     preprocess_gen_pairs.py <File> --dataset=<dataset>
     preprocess_gen_pairs.py <File> --dataset=<dataset> [--split=<set>]
     preprocess_gen_pairs.py <File> --dataset=<dataset> [--split=<set>] [--ratio=<x>] [--topic=<type>]
@@ -21,7 +19,7 @@ from pathlib import Path
 from docopt import docopt
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, DataSet
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, Split
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import TopicConfig
 
 

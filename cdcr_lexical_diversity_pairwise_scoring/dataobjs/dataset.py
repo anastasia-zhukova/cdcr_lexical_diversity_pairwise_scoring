@@ -1,13 +1,12 @@
+import enum
 import logging
 import pickle
+import random
+import re
 from itertools import combinations
 from pathlib import Path
 
-import enum
-import random
-import re
-
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import TopicConfig, Topics, Topic
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topic, TopicConfig, Topics
 
 
 logger = logging.getLogger(__name__)
@@ -26,7 +25,7 @@ class POLARITY(enum.Enum):
     NEGATIVE = 2
 
 
-class DataSet(object):
+class DataSet:
     def __init__(self, name="DataSetSuper", ratio=-1):
         self.ratio = ratio
         self.name = name
@@ -61,7 +60,7 @@ class DataSet(object):
     def get_dataset(dataset_name: str, ratio=-1, split=Split.na):
         if dataset_name == "ecb":
             return EcbDataSet(ratio=ratio)
-        elif dataset_name == "wec":
+        if dataset_name == "wec":
             return WecDataSet(ratio=ratio, split=split)
         raise ValueError("Dataset name not supported-" + dataset_name)
 
@@ -151,9 +150,9 @@ class EcbDataSet(DataSet):
             for mention1 in topic.mentions:
                 for mention2 in topic.mentions:
                     if mention1.mention_id != mention2.mention_id:
-                        if polarity == POLARITY.POSITIVE and mention1.coref_chain == mention2.coref_chain:
-                            cls.check_and_add_pair(_map, _pairs, mention1, mention2)
-                        elif polarity == POLARITY.NEGATIVE and mention1.coref_chain != mention2.coref_chain:
+                        if (polarity == POLARITY.POSITIVE and mention1.coref_chain == mention2.coref_chain) or (
+                            polarity == POLARITY.NEGATIVE and mention1.coref_chain != mention2.coref_chain
+                        ):
                             cls.check_and_add_pair(_map, _pairs, mention1, mention2)
 
         return _pairs

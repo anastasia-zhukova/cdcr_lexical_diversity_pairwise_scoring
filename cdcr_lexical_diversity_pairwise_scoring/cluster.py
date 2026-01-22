@@ -1,6 +1,4 @@
-"""
-
-Usage:
+"""Usage:
     cluster.py --tmf=<TestMentionsFile> --predictions=<TestPredictionsPickle> [--print=readable]
             [--alt=<AverageLinkThresh>]
 
@@ -12,7 +10,7 @@ Options:
 """
 
 import pickle
-from typing import Callable
+from collections.abc import Callable
 from pathlib import Path
 
 from docopt import docopt

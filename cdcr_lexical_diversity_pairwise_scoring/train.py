@@ -1,6 +1,4 @@
-"""
-
-Usage:
+"""Usage:
     train.py --tpf=<TrainPosFile> --tnf=<TrainNegFile> --dpf=<DevPosFile> --dnf=<DevNegFile>
                     --te=<TrainEmbed> --de=<DevEmbed> --mf=<ModelFile> [--bs=<x>] [--lr=<y>] [--ratio=<z>] [--itr=<k>]
                     [--cuda=<b>] [--ft=<b1>] [--wd=<t>] [--hidden=<w>] [--dataset=<d>]
@@ -19,23 +17,23 @@ Options:
 
 """
 
-from datetime import datetime
 import logging
+import random
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
 import numpy as np
-import random
 import torch
-
 from docopt import docopt
+
+from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, Split
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, get_prec_rec_f1
-from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path
+from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
 
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, Split
-from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +63,7 @@ def train_pairwise(
         current_batch = 1
         # TODO: rewrite using dataloader.
         for start_index in range(0, dataset_size, batch_size):
-            if end_index > dataset_size:
-                end_index = dataset_size
+            end_index = min(end_index, dataset_size)
 
             optimizer.zero_grad()
 
@@ -111,7 +108,7 @@ def accuracy_on_dataset(
 
     logger.info(
         "%s: %d: Accuracy: %.10f: precision: %.10f: recall: %.10f: f1: %.10f"
-        % (evaluation_set_name + "-Acc", epoch, accuracy.item(), precision, recall, f1)
+        % (evaluation_set_name + "-Acc", epoch, accuracy.item(), precision, recall, f1),
     )
 
     return accuracy, precision, recall, f1
@@ -234,7 +231,7 @@ def main(arguments):
         + ", hidden_s="
         + str(_hidden_size)
         + ", weight_decay="
-        + str(_weight_decay)
+        + str(_weight_decay),
     )
 
     _event_train_feat, _event_validation_feat, _pairwise_model = init_basic_training_resources(

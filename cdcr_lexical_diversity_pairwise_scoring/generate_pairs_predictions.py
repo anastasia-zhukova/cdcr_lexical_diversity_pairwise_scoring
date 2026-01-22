@@ -1,6 +1,4 @@
-"""
-
-Usage:
+"""Usage:
     generate_pairs_predictions.py --tmf=<TestMentionsFile> --tef=<TestEmbedFile> --mf=<ModelFile> --out=<OurPredFile>
             [--cuda=<y>] [--topic=<type>] [--em=<ExtractMethod>]
 
@@ -12,11 +10,11 @@ Options:
 """
 
 import pickle
+import random
 from itertools import product
 from pathlib import Path
 
 import numpy as np
-import random
 import torch
 from docopt import docopt
 
@@ -29,6 +27,7 @@ from cdcr_lexical_diversity_pairwise_scoring.coref_system.relation_extraction im
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import TopicConfig
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
+
 
 MAX_ALLOWED_BATCH_SIZE = 20000
 

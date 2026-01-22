@@ -1,7 +1,6 @@
-from enum import IntEnum
 import json
 import logging
-from typing import Dict
+from enum import IntEnum
 from pathlib import Path
 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
@@ -16,13 +15,13 @@ class TopicConfig(IntEnum):
     corpus = 3
 
 
-class Topic(object):
+class Topic:
     def __init__(self, topic_id: str):
         self.topic_id = topic_id
         self.mentions = []
 
 
-class Topics(object):
+class Topics:
     def __init__(self):
         self.topics_dict = dict()
         self.keep_order = False
@@ -42,11 +41,10 @@ class Topics(object):
         mentions_file_path: Path,
         keep_order: bool = True,
     ) -> None:
-        """
+        """Args:
+        keep_order: whether to keep original mentions order or not (default = False)
+        mentions_file_path: this topic mentions json file
 
-        Args:
-            keep_order: whether to keep original mentions order or not (default = False)
-            mentions_file_path: this topic mentions json file
         """
         self.keep_order = keep_order
         with mentions_file_path.open("r", encoding="utf-8") as file:
@@ -54,14 +52,14 @@ class Topics(object):
 
         self.topics_dict = self.order_mentions_by_topics(mentions)
 
-    def order_mentions_by_topics(self, mentions: list[dict]) -> Dict[str, Topic]:
-        """
-        Order mentions to documents topics
+    def order_mentions_by_topics(self, mentions: list[dict]) -> dict[str, Topic]:
+        """Order mentions to documents topics
         Args:
             mentions: json mentions file
 
         Returns:
             List[Topic] of the mentions separated by their documents topics
+
         """
         running_index = 0
         topics = dict()

@@ -1,5 +1,4 @@
-"""
-Usage:
+"""Usage:
     inference.py --tpf=<TestPosFile> --tnf=<testNegFile> --te=<TestEmbed> --mf=<ModelFile> [--cuda=<b>]
 
 Options:
@@ -14,10 +13,12 @@ import os
 
 import torch
 from docopt import docopt
-from cdcr_lexical_diversity_pairwise_scoring.train import accuracy_on_dataset
-from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
+
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import EcbDataSet
+from cdcr_lexical_diversity_pairwise_scoring.train import accuracy_on_dataset
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
+from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
+
 
 logger = logging.getLogger(__name__)
 

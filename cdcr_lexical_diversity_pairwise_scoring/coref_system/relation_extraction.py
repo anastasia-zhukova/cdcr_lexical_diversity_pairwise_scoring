@@ -1,5 +1,6 @@
-import torch
 from enum import Enum
+
+import torch
 
 
 class RelationTypeEnum(Enum):
@@ -9,7 +10,7 @@ class RelationTypeEnum(Enum):
     pairwise = 3
 
 
-class RelationExtraction(object):
+class RelationExtraction:
     def __init__(self):
         self.cache = dict()
 
@@ -21,7 +22,7 @@ class RelationExtraction(object):
         return torch.tensor(prediction), None
 
     def _solve(self, mention_x, mention_y):
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class ExactStringRelationExtractor(RelationExtraction):

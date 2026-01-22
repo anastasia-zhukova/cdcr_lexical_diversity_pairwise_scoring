@@ -1,15 +1,14 @@
 import pickle
-from typing import List
 from pathlib import Path
 
 import torch
-from transformers import RobertaTokenizer, RobertaModel
+from transformers import RobertaModel, RobertaTokenizer
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
 
 
-class EmbedTransformersGenerics(object):
+class EmbedTransformersGenerics:
     def __init__(
         self,
         max_surrounding_context: int,
@@ -86,7 +85,7 @@ class EmbedTransformersGenerics(object):
         mention_span = self.tokenizer.encode(" ".join(mention_span_str), add_special_tokens=False)
 
         all_sentence_tokens = [
-            self.tokenizer.cls_token_id + context_before + mention_span + context_after + self.tokenizer.sep_token_id
+            self.tokenizer.cls_token_id + context_before + mention_span + context_after + self.tokenizer.sep_token_id,
         ]
         all_sentence_tokens = torch.tensor(all_sentence_tokens)
         mention_start_index = len(context_before) + 1
@@ -98,10 +97,10 @@ class EmbedTransformersGenerics(object):
         return self.model.config.hidden_size
 
 
-class EmbedFromFile(object):
+class EmbedFromFile:
     def __init__(
         self,
-        files_to_load: Path | List[Path],
+        files_to_load: Path | list[Path],
     ):
         self.embed_size = 1024
         bert_dict = dict()
