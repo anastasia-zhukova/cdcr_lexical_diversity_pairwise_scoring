@@ -15,13 +15,13 @@ from transformers import RobertaTokenizer
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.cluster import Clusters
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedTransformersGenerics
-from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import StringUtils
+from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import SpacySyntaxAnalyzer
 
 
 def count_verb_mentions(split_list):
     verb_phrases = 0
     for mention in split_list:
-        if StringUtils.is_verb_phrase(mention.tokens_str):
+        if SpacySyntaxAnalyzer.is_verb_phrase(mention.tokens_str):
             verb_phrases += 1
 
     print("Total verb phrases=" + str(verb_phrases))

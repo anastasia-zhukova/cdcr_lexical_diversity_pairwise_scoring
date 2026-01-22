@@ -2,7 +2,7 @@ import json
 from typing import List, Literal
 from pathlib import Path
 
-from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import StringUtils
+from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import SpacySyntaxAnalyzer
 
 
 class MentionData:
@@ -48,7 +48,7 @@ class MentionData:
         if not mention_head and not mention_head_lemma:
             if gen_lemma:
                 self.mention_head, self.mention_head_lemma, self.mention_head_pos, self.mention_ner = (
-                    StringUtils.find_head_lemma_pos_ner(str(tokens_str))
+                    SpacySyntaxAnalyzer.find_head_lemma_pos_ner(str(tokens_str))
                 )
         else:
             self.mention_head = mention_head
@@ -93,7 +93,7 @@ class MentionData:
         mention_ner = mention_line.get("mention_ner")
 
         if mention_head is None or mention_head_lemma is None:
-            mention_head, mention_head_lemma, mention_pos, mention_ner = StringUtils.find_head_lemma_pos_ner(
+            mention_head, mention_head_lemma, mention_pos, mention_ner = SpacySyntaxAnalyzer.find_head_lemma_pos_ner(
                 str(mention_text)
             )
 

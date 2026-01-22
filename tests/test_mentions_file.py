@@ -1,7 +1,7 @@
 import unittest
 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
-from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import StringUtils
+from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import SpacyTokenizer
 
 
 class TestMentions(unittest.TestCase):
@@ -10,7 +10,7 @@ class TestMentions(unittest.TestCase):
         mentions.extend(MentionData.read_mentions_json_to_mentions_data_list("tests/test_res/Event_gold_mentions.json"))
         for mention in mentions:
             for i, tok_id in enumerate(mention.tokens_number):
-                mention_text = list(zip(*StringUtils.get_tokenized_string(mention.tokens_str)))[0]
+                mention_text = list(zip(*SpacyTokenizer.get_tokenized_string(mention.tokens_str)))[0]
                 if mention_text[i] != mention.mention_context[tok_id]:
                     raise Exception("Issue with mention-" + str(mention.mention_id))
 
