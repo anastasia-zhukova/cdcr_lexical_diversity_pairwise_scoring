@@ -110,7 +110,7 @@ class TestEmbeddings(unittest.TestCase):
     def test_mention_feat_to_vec(self):
         mentions = list()
         mentions.extend(MentionData.read_mentions_json_to_mentions_data_list("tests/test_res/Event_gold_mentions.json"))
-        config = EmbedTransformersGenerics(max_surrounding_contx=250, use_cuda=False)
+        config = EmbedTransformersGenerics(max_surrounding_context=250, use_cuda=False)
         for mention in mentions:
             encoded = list(torch.tensor(config.tokenizer.encode(mention.tokens_str)[1:-1]))
             decoded = config.tokenizer.decode(encoded)

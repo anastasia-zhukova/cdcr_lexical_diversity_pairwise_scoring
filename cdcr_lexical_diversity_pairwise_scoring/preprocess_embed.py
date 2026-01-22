@@ -58,7 +58,7 @@ def worker(
     use_cuda: bool,
 ):
     embed_model = EmbedTransformersGenerics(
-        max_surrounding_contx=max_surrounding_context,
+        max_surrounding_context=max_surrounding_context,
         use_cuda=use_cuda,
     )
     name = multiprocessing.current_process().name

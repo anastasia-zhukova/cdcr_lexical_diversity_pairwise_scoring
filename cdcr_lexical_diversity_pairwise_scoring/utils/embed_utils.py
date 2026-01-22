@@ -1,4 +1,3 @@
-import logging
 import pickle
 from typing import List
 from pathlib import Path
@@ -6,34 +5,38 @@ from pathlib import Path
 import torch
 from transformers import RobertaTokenizer, RobertaModel
 
+from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
-
-logger = logging.getLogger(__name__)
 
 
 class EmbedTransformersGenerics(object):
-    def __init__(self, max_surrounding_contx, finetune=False, use_cuda=True):
+    def __init__(
+        self,
+        max_surrounding_context: int,
+        finetune: bool = False,
+        use_cuda: bool = True,
+        bert_model_name: str = "roberta-large",
+    ):
 
-        self.model = RobertaModel.from_pretrained("roberta-large")
-        # self.model = BertModel.from_pretrained("bert-large-cased")
-        self.tokenizer = RobertaTokenizer.from_pretrained("roberta-large")
-        # self.tokenizer = BertTokenizer.from_pretrained("bert-large-cased")
-        self.max_surrounding_contx = max_surrounding_contx
+        self.max_surrounding_context = max_surrounding_context
         self.use_cuda = use_cuda
         self.finetune = finetune
-        self.embed_size = 1024
+        self.bert_model_name = bert_model_name
+
+        self.model = RobertaModel.from_pretrained(self.bert_model_name)
+        self.tokenizer = RobertaTokenizer.from_pretrained(self.bert_model_name)
 
         if self.use_cuda:
             self.model.cuda()
 
-    def get_mention_full_rep(self, mention):
+    def get_mention_full_rep(self, mention: MentionData):
         sent_ids, ment1_inx_start, ment1_inx_end = self.mention_feat_to_vec(mention)
 
         if self.use_cuda:
             sent_ids = sent_ids.cuda()
 
         if not self.finetune:
-            with torch.no_grad():
+            with torch.no_grad():  # TODO: this should be handled outside
                 last_hidden_span = self.model(sent_ids).last_hidden_state
         else:
             last_hidden_span = self.model(sent_ids).last_hidden_state
@@ -42,12 +45,12 @@ class EmbedTransformersGenerics(object):
         return mention_hidden_span, mention_hidden_span[0], mention_hidden_span[-1], mention_hidden_span.shape[0]
 
     @staticmethod
-    def extract_mention_surrounding_context(mention):
-        tokens_inds = mention.tokens_number
+    def extract_mention_surrounding_context(mention: MentionData):
+        tokens_indexes = mention.tokens_number
         context = mention.mention_context
-        start_mention_index = tokens_inds[0]
-        end_mention_index = tokens_inds[-1] + 1
-        assert len(tokens_inds) == len(mention.tokens_str.split(" "))
+        start_mention_index = tokens_indexes[0]
+        end_mention_index = tokens_indexes[-1] + 1
+        assert len(tokens_indexes) == len(mention.tokens_str.split(" "))
 
         ret_context_before = context[0:start_mention_index]
         ret_mention = context[start_mention_index:end_mention_index]
@@ -58,41 +61,41 @@ class EmbedTransformersGenerics(object):
 
         return ret_context_before, ret_mention, ret_context_after
 
-    def mention_feat_to_vec(self, mention):
-        cntx_before_str, ment_span_str, cntx_after_str = EmbedTransformersGenerics.extract_mention_surrounding_context(
-            mention
+    def mention_feat_to_vec(self, mention: MentionData):
+        context_before_str, mention_span_str, context_after_str = (
+            EmbedTransformersGenerics.extract_mention_surrounding_context(mention)
         )
 
-        cntx_before, cntx_after = cntx_before_str, cntx_after_str
-        if len(cntx_before_str) != 0:
-            cntx_before = self.tokenizer.encode(" ".join(cntx_before_str), add_special_tokens=False)
-        if len(cntx_after_str) != 0:
-            cntx_after = self.tokenizer.encode(" ".join(cntx_after_str), add_special_tokens=False)
+        context_before = (
+            self.tokenizer.encode(" ".join(context_before_str), add_special_tokens=False)
+            if len(context_before_str) > 0
+            else []
+        )
+        context_after = (
+            self.tokenizer.encode(" ".join(context_after_str), add_special_tokens=False)
+            if len(context_after_str) > 0
+            else []
+        )
 
-        if self.max_surrounding_contx != -1:
-            if len(cntx_before) > self.max_surrounding_contx:
-                cntx_before = cntx_before[-self.max_surrounding_contx + 1 :]
-            if len(cntx_after) > self.max_surrounding_contx:
-                cntx_after = cntx_after[: self.max_surrounding_contx - 1]
+        if self.max_surrounding_context != -1:
+            if len(context_before) > self.max_surrounding_context:
+                context_before = context_before[-self.max_surrounding_context + 1 :]
+            if len(context_after) > self.max_surrounding_context:
+                context_after = context_after[: self.max_surrounding_context - 1]
 
-        ment_span = self.tokenizer.encode(" ".join(ment_span_str), add_special_tokens=False)
+        mention_span = self.tokenizer.encode(" ".join(mention_span_str), add_special_tokens=False)
 
-        if isinstance(ment_span, torch.Tensor):
-            ment_span = ment_span.tolist()
-        if isinstance(cntx_before, torch.Tensor):
-            cntx_before = cntx_before.tolist()
-        if isinstance(cntx_after, torch.Tensor):
-            cntx_after = cntx_after.tolist()
+        all_sentence_tokens = [
+            self.tokenizer.cls_token_id + context_before + mention_span + context_after + self.tokenizer.sep_token_id
+        ]
+        all_sentence_tokens = torch.tensor(all_sentence_tokens)
+        mention_start_index = len(context_before) + 1
+        mention_end_index = len(context_before) + len(mention_span) + 1
+        return all_sentence_tokens, mention_start_index, mention_end_index
 
-        all_sent_toks = [[0] + cntx_before + ment_span + cntx_after + [2]]
-        sent_tokens = torch.tensor(all_sent_toks)
-        mention_start_idx = len(cntx_before) + 1
-        mention_end_idx = len(cntx_before) + len(ment_span) + 1
-        assert all_sent_toks[0][mention_start_idx:mention_end_idx] == ment_span
-        return sent_tokens, mention_start_idx, mention_end_idx
-
+    @property
     def get_embed_size(self):
-        return self.embed_size
+        return self.model.config.hidden_size
 
 
 class EmbedFromFile(object):
@@ -100,9 +103,6 @@ class EmbedFromFile(object):
         self,
         files_to_load: Path | List[Path],
     ):
-        """
-        :param files_to_load: list of pre-generated embedding file names
-        """
         self.embed_size = 1024
         bert_dict = dict()
 
@@ -120,33 +120,6 @@ class EmbedFromFile(object):
 
         self.embeddings = list(bert_dict.values())
         self.embed_key = {k: i for i, k in enumerate(bert_dict.keys())}
-
-    def get_mention_full_rep(self, mention):
-        return self.embeddings[self.embed_key[mention.mention_id]]
-
-    def get_mentions_rep(self, mentions_list):
-        embed_list = [self.embeddings[self.embed_key[mention.mention_id]] for mention in mentions_list]
-        return embed_list
-
-    def get_embed_size(self):
-        return self.embed_size
-
-
-class EmbedInMemory(object):
-    def __init__(self, mentions: List[MentionData], max_surrounding_contx, use_cuda):
-        self.embed_size = 1024
-        bert_dict = dict()
-        embed_model = EmbedTransformersGenerics(max_surrounding_contx=max_surrounding_contx, use_cuda=use_cuda)
-
-        for ment in mentions:
-            hidden, first_tok, last_tok, ment_size = embed_model.get_mention_full_rep(ment)
-            bert_dict[ment.mention_id] = (hidden.cpu(), first_tok.cpu(), last_tok.cpu(), ment_size)
-
-        self.embeddings = list(bert_dict.values())
-        self.embed_key = {k: i for i, k in enumerate(bert_dict.keys())}
-
-    def get_mention_full_rep(self, mention):
-        return self.embeddings[self.embed_key[mention.mention_id]]
 
     def get_mentions_rep(self, mentions_list):
         embed_list = [self.embeddings[self.embed_key[mention.mention_id]] for mention in mentions_list]
