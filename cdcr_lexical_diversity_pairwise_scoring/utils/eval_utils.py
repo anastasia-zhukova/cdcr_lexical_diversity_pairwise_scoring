@@ -1,20 +1,12 @@
 from sklearn.metrics import confusion_matrix
 
 
-def get_confusion_matrix(all_labels, all_predictions):
-    return confusion_matrix(all_labels, all_predictions).ravel()
+def get_confusion_matrix(y_true, y_pred):
+    return confusion_matrix(y_true, y_pred).ravel()
 
 
-def get_prec_rec_f1(tp, fp, fn):
-    tpfp = tp + fp
-    tpfn = tp + fn
-
-    precision, recall, f1 = (0.0, 0.0, 0.0)
-    if tpfp != 0:
-        precision = tp / tpfp
-    if tpfn != 0:
-        recall = tp / tpfn
-    if precision != 0 or recall != 0:
-        f1 = (2 * precision * recall) / (precision + recall)
-
+def precision_recall_f1(tp: int, fp: int, fn: int):
+    precision = tp / (tp + fp) if tp + fp != 0 else 0.0
+    recall = tp / (tp + fn) if tp + fn != 0 else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall != 0 else 0.0
     return precision, recall, f1
