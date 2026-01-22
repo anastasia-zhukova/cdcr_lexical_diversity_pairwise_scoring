@@ -1,9 +1,7 @@
-import datetime
 import logging
 
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path
 
-
+# TODO: add proper logging.
 def create_logger_with_fh(params_str=""):
     log_file = params_str + ".log"
 
@@ -11,5 +9,6 @@ def create_logger_with_fh(params_str=""):
         level=logging.INFO,
         handlers=[
             logging.FileHandler(log_file),
-            logging.StreamHandler()
-        ])
+            logging.StreamHandler(),
+        ],
+    )
