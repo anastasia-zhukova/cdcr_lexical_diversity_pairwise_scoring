@@ -21,14 +21,13 @@ import logging
 import random
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 import torch
 from docopt import docopt
 
 from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, Split
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, get_prec_rec_f1
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path
@@ -147,7 +146,7 @@ def run_inference(
 def init_basic_training_resources(
     train_embeddings_path: Path,
     dev_embeddings_path: Path,
-    dataset_type: Literal["wec", "ecb"],
+    dataset_type: DatasetEnum,
     train_positive_file_path: Path,
     train_negative_file_path: Path,
     dev_positive_file_path: Path,

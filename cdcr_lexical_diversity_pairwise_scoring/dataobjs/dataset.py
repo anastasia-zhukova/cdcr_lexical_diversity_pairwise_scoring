@@ -1,8 +1,8 @@
-import enum
 import logging
 import pickle
 import random
 import re
+from enum import IntEnum, StrEnum
 from itertools import combinations
 from pathlib import Path
 
@@ -13,14 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 # creating enumerations using class
-class Split(enum.Enum):
+class Split(IntEnum):
     dev = 1
     test = dev
     train = 2
     na = 3
 
 
-class POLARITY(enum.Enum):
+class DatasetEnum(StrEnum):
+    ecb = "ecb"
+    wec = "wec"
+
+
+class POLARITY(IntEnum):
     POSITIVE = 1
     NEGATIVE = 2
 
@@ -57,14 +62,14 @@ class DataSet:
         return pairs
 
     @staticmethod
-    def get_dataset(dataset_name: str, ratio=-1, split=Split.na):
-        if dataset_name == "ecb":
+    def get_dataset(dataset_name: DatasetEnum, ratio=-1, split=Split.na):
+        if dataset_name == DatasetEnum.ecb:
             return EcbDataSet(ratio=ratio)
-        if dataset_name == "wec":
+        if dataset_name == DatasetEnum.wec:
             return WecDataSet(ratio=ratio, split=split)
         raise ValueError("Dataset name not supported-" + dataset_name)
 
-    def get_pairwise_feat(self, data_file: str, to_topics=TopicConfig.subtopic):
+    def get_pairwise_feat(self, data_file: Path, to_topics=TopicConfig.subtopic):
         topics_ = Topics()
         topics_.create_from_file(data_file, keep_order=True)
         logger.info("Create pos/neg examples")

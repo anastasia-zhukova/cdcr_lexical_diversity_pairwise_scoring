@@ -1,24 +1,25 @@
 import unittest
 
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, Split
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import TopicConfig
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import validate_pairs
 
 
 class TestDataUtils(unittest.TestCase):
     def test_pairs_file(self):
-        dataset = DataSet.get_dataset("ecb")
+        dataset = DataSet.get_dataset(DatasetEnum.wec)
         positive_, negative_ = dataset.get_pairwise_feat(
-            "tests/test_res/Event_gold_mentions.json", to_topics=TopicConfig.subtopic
+            "tests/test_res/Event_gold_mentions.json",
+            to_topics=TopicConfig.subtopic,
         )
         self.validate(dataset, negative_, positive_)
 
-        dataset = DataSet.get_dataset("wec", split=Split.train, ratio=10)
+        dataset = DataSet.get_dataset(DatasetEnum.wec, split=Split.train, ratio=10)
         positive_, negative_ = dataset.get_pairwise_feat("tests/test_res/Event_gold_mentions.json")
         self.assertEqual(len(positive_) * 10, len(negative_))
         self.validate(dataset, negative_, positive_)
 
-        dataset = DataSet.get_dataset("wec", split=Split.dev)
+        dataset = DataSet.get_dataset(DatasetEnum.wec, split=Split.dev)
         positive_, negative_ = dataset.get_pairwise_feat("tests/test_res/Event_gold_mentions.json")
         self.validate(dataset, negative_, positive_)
 

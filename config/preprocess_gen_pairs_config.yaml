@@ -1,0 +1,5 @@
+event_validation_file: resources/wec/Dev_Event_gold_mentions_validated.json
+ratio: -1
+split: dev
+topic: corpus
+dataset_name: wec

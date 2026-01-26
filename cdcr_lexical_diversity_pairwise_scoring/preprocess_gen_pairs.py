@@ -14,19 +14,31 @@ Options:
 
 import pickle
 import random
+from dataclasses import dataclass
 from pathlib import Path
 
-from docopt import docopt
+import hydra
+from hydra.core.config_store import ConfigStore
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, Split
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import TopicConfig
 
 
+@dataclass
+class Config:
+    event_validation_file: Path
+    ratio: int
+    split: Split
+    topic: TopicConfig
+    dataset_name: DatasetEnum
+
+
 def generate_pairs(
-    event_validation_file: str,
+    event_validation_file: Path,
     dataset: DataSet,
-    topic_config: int,  # TODO: confit should not be presented as int.
+    topic_config: int,  # TODO: config should not be presented as int.
 ):
     positive, negative = dataset.get_pairwise_feat(
         data_file=event_validation_file,
@@ -61,38 +73,26 @@ def validate_pairs(pos_pairs, neg_pairs):
     logger.info("Validation Passed!")
 
 
-def main(arguments):
-    _event_validation_file = arguments.get("<File>")
-    _ratio = int(arguments.get("--ratio"))
-    _split_arg = arguments.get("--split").lower()
-    _topic_arg = arguments.get("--topic")
-    _dataset_arg = arguments.get("--dataset")
+cs = ConfigStore.instance()
+cs.store(name="preprocess_gen_pairs_config", node=Config)
 
-    # TODO: raise error when not in train/dev/test?
-    split = Split[_split_arg]
 
-    topic_config = TopicConfig[_topic_arg]
-
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name="preprocess_gen_pairs_config")
+def main(config: Config) -> None:
+    logger.debug(config)
     random.seed(0)
-    dataset = DataSet.get_dataset(_dataset_arg, ratio=_ratio, split=split)
+    dataset = DataSet.get_dataset(config.dataset_name, ratio=config.ratio, split=config.split)
 
-    if _dataset_arg == "wec" and split == Split.train and _ratio == -1:
+    if config.dataset_name == DatasetEnum.wec and config.split == Split.train and config.ratio == -1:
         logger.warning("Selected WEC dataset for train with a -1 ratio will generate all possible negative pairs!!")
 
-    logger.info("Generating pairs for file-/" + _event_validation_file)
+    logger.info(f"Generating pairs for file: {config.event_validation_file}")
     generate_pairs(
-        event_validation_file=_event_validation_file,
+        event_validation_file=PROJECT_ROOT / config.event_validation_file,
         dataset=dataset,
-        topic_config=topic_config,
+        topic_config=config.topic,
     )
 
 
 if __name__ == "__main__":
-    arguments = docopt(
-        __doc__,
-        argv=None,
-        help=True,
-        version=None,
-        options_first=False,
-    )
-    main(arguments)
+    main()
