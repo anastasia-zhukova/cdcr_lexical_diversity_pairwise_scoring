@@ -16,61 +16,30 @@ import pickle
 import random
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List
 
 import hydra
 from hydra.core.config_store import ConfigStore
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import TopicConfig
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split, uCDCRDataSet
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import ScopeConfig
 
 
 @dataclass
 class Config:
-    event_validation_file: Path
+    dataset_folder: Path
+    setting: str
+    type_of_pairs: str
     ratio: int
-    split: Split
-    topic: TopicConfig
-    dataset_name: DatasetEnum
-
-
-def generate_pairs(
-    event_validation_file: Path,
-    dataset: DataSet,
-    topic_config: int,  # TODO: config should not be presented as int.
-):
-    positive, negative = dataset.get_pairwise_feat(
-        data_file=event_validation_file,
-        to_topics=topic_config,
-    )
-    logger.debug(f"Created {len(positive)} positive pairs and {len(negative)} negative pairs.")
-    validate_pairs(positive, negative)
-
-    dirname = Path(event_validation_file).parent
-    basename = Path(event_validation_file).stem
-
-    positive_file_path = dirname / f"{basename}_PosPairs.pickle"
-    with positive_file_path.open("wb") as file:
-        pickle.dump(positive, file)
-    logger.info(f"Saved positive pairs in {positive_file_path}.")
-
-    negative_file_path = dirname / f"{basename}_NegPairs.pickle"
-    with negative_file_path.open("wb") as file:
-        pickle.dump(negative, file)
-    logger.info(f"Saved negative pairs in {negative_file_path}.")
-
-
-def validate_pairs(pos_pairs, neg_pairs):
-    for men1, men2 in pos_pairs:
-        if men1.coref_chain != men2.coref_chain:
-            raise ValueError("Error when validating positive pairs!")
-
-    for men1, men2 in neg_pairs:
-        if men1.coref_chain == men2.coref_chain:
-            raise ValueError("Error when validating negative pairs!")
-
-    logger.info("Validation Passed!")
+    max_pairs_train: int
+    train_scope: ScopeConfig
+    train_dataset_names: List[str]
+    dev_scope: ScopeConfig
+    max_pairs_dev: int
+    test_scope: ScopeConfig
+    test_dataset_names: List[str]
 
 
 cs = ConfigStore.instance()
@@ -81,17 +50,46 @@ cs.store(name="preprocess_gen_pairs_config", node=Config)
 def main(config: Config) -> None:
     logger.debug(config)
     random.seed(0)
-    dataset = DataSet.get_dataset(config.dataset_name, ratio=config.ratio, split=config.split)
 
-    if config.dataset_name == DatasetEnum.wec and config.split == Split.train and config.ratio == -1:
-        logger.warning("Selected WEC dataset for train with a -1 ratio will generate all possible negative pairs!!")
+    for split in [Split.train, Split.dev, Split.test]:
+        dataset = uCDCRDataSet(config, split)
 
-    logger.info(f"Generating pairs for file: {config.event_validation_file}")
-    generate_pairs(
-        event_validation_file=PROJECT_ROOT / config.event_validation_file,
-        dataset=dataset,
-        topic_config=config.topic,
-    )
+        if split == Split.train:
+            scope = config.train_scope.value
+            max_pairs = config.max_pairs_train
+            type_of_pairs = config.type_of_pairs
+        elif split.value == Split.dev:
+            scope = config.dev_scope.value
+            max_pairs = config.max_pairs_dev
+            type_of_pairs = "all"
+        else:
+            scope = config.test_scope.value
+            max_pairs = "all"
+            type_of_pairs = "all"
+
+        save_path = PROJECT_ROOT / "resources" / f"{split.value}_{type_of_pairs}_{scope}_{max_pairs}_{'-'.join(dataset.dataset_components)}.pickle"
+        if save_path.exists():
+            logger.info(f"A dataset for {split} with the same config already exists. Skipped.")
+
+        logger.info(f"Generating pairs for file: {split}")
+        # TODO
+        dataset.generate_pairs()
+        # TODO
+        dataset.save_dataset(save_path)
+
+    # TODO save dataset
+    # dirname = Path(dataset_folder).parent
+    # basename = Path(dataset_folder).stem
+    #
+    # positive_file_path = dirname / f"{basename}_PosPairs.pickle"
+    # with positive_file_path.open("wb") as file:
+    #     pickle.dump(positive, file)
+    # logger.info(f"Saved positive pairs in {positive_file_path}.")
+    #
+    # negative_file_path = dirname / f"{basename}_NegPairs.pickle"
+    # with negative_file_path.open("wb") as file:
+    #     pickle.dump(negative, file)
+    # logger.info(f"Saved negative pairs in {negative_file_path}.")
 
 
 if __name__ == "__main__":

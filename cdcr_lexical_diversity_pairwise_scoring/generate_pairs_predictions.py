@@ -24,7 +24,7 @@ from cdcr_lexical_diversity_pairwise_scoring.coref_system.relation_extraction im
     HeadLemmaRelationExtractor,
     RelationTypeEnum,
 )
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import TopicConfig
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import ScopeConfig
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 
@@ -91,7 +91,7 @@ def main(arguments):
     _topic_arg = arguments.get("--topic")
     _extract_method_str = arguments.get("--em")
 
-    _topic_config = TopicConfig[_topic_arg]
+    _topic_config = ScopeConfig[_topic_arg]
     _extract_method = RelationTypeEnum[_extract_method_str]
 
     torch.manual_seed(1)
@@ -102,7 +102,7 @@ def main(arguments):
     event_topics = Topics()
     event_topics.create_from_file(_mentions_file, True)
 
-    if _topic_config == TopicConfig.corpus and len(event_topics.topics_dict) > 1:
+    if _topic_config == ScopeConfig.corpus and len(event_topics.topics_dict) > 1:
         event_topics.to_single_topic()
 
     _cluster_algo = None

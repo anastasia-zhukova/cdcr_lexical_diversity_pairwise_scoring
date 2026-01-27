@@ -1,5 +1,21 @@
-event_validation_file: resources/wec/Dev_Event_gold_mentions_validated.json
-ratio: -1
-split: dev
-topic: corpus
-dataset_name: wec
+dataset_folder: datasets/uCDCR
+setting: single
+type_of_pairs: random
+ratio: 10
+max_pairs_train: 50000
+train_scope: subtopic
+train_dataset_names:
+  - ECBplus
+  - ECBplusMETAm
+  - GVC
+  - HyperCoref
+  - MEANTIME
+  - NewsWCL50
+  - NiDENT
+  - NP4E
+  - WECEng
+dev_scope: subtopic
+max_pairs_dev: 8000
+test_scope: subtopic
+test_dataset_names:
+  - ECBplus

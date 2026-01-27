@@ -2,22 +2,24 @@ import logging
 import pickle
 import random
 import re
+import json
+from Typing import Tuple
 from enum import IntEnum, StrEnum
 from itertools import combinations
 from pathlib import Path
 
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topic, TopicConfig, Topics
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topic, ScopeConfig, Topics
 
 
 logger = logging.getLogger(__name__)
 
 
 # creating enumerations using class
-class Split(IntEnum):
-    dev = 1
-    test = dev
-    train = 2
-    na = 3
+class Split(StrEnum):
+    train = "train"
+    dev = "val"
+    test = "test"
+    na = "n/a"
 
 
 class DatasetEnum(StrEnum):
@@ -28,6 +30,20 @@ class DatasetEnum(StrEnum):
 class POLARITY(IntEnum):
     POSITIVE = 1
     NEGATIVE = 2
+
+
+class DatasetSetting(StrEnum):
+    single = "single"
+    excluding_target = "excluding_target"
+    mix = "mix"
+
+
+class MentionPairStrategy(StrEnum):
+    all = "all"
+    random = "random"
+    lemma = "same_lemma"
+    embedding = "embedding"
+    encoder = "encoder"
 
 
 class DataSet:
@@ -69,7 +85,7 @@ class DataSet:
             return WecDataSet(ratio=ratio, split=split)
         raise ValueError("Dataset name not supported-" + dataset_name)
 
-    def get_pairwise_feat(self, data_file: Path, to_topics=TopicConfig.subtopic):
+    def get_pairwise_feat(self, data_file: Path, to_topics=ScopeConfig.subtopic):
         topics_ = Topics()
         topics_.create_from_file(data_file, keep_order=True)
         logger.info("Create pos/neg examples")
@@ -82,7 +98,21 @@ class DataSet:
 
         logger.info("pos-" + str(len(positive_)))
         logger.info("neg-" + str(len(negative_)))
+        DataSet.validate_pairs(positive_, negative_)
+        logger.debug(f"Created {len(positive_)} positive pairs and {len(negative_)} negative pairs.")
         return positive_, negative_
+
+    @classmethod
+    def validate_pairs(cls, pos_pairs, neg_pairs):
+        for men1, men2 in pos_pairs:
+            if men1.coref_chain != men2.coref_chain:
+                raise ValueError("Error when validating positive pairs!")
+
+        for men1, men2 in neg_pairs:
+            if men1.coref_chain == men2.coref_chain:
+                raise ValueError("Error when validating negative pairs!")
+
+        logger.info("Validation Passed!")
 
     @classmethod
     def create_pos_neg_pairs(cls, topics, to_topic):
@@ -119,15 +149,182 @@ class DataSet:
         return False
 
 
+def update_mention_id(mentions, dataset_name: str):
+    """
+    Ensure that the keys will remain unique across the datasets
+    """
+    mentions_new = []
+    mention_ids = []
+    for m in mentions:
+        m["mention_id"] = f"{dataset_name}_{m['topic_id']}_{m['subtopic_id']}_{m['mention_id']}"
+        m["dataset"] = dataset_name
+        m["coref_chain"] = f"{dataset_name}_{m['coref_chain']}"
+        m["subtopic_id"] = f"{dataset_name}_{m['subtopic_id']}"
+        m["topic_id"] = f"{dataset_name}_{m['topic_id']}"
+        mentions_new.append(m)
+        mention_ids.append(m["mention_id"])
+    return mentions_new, mention_ids
+
+
+def read_mention_files(dataset_path: Path, dataset_name: str) -> Tuple[list, list]:
+    with open(dataset_path / "entity_mentions.json", "r", encoding="utf-8") as file:
+        entity_mentions = json.load(file)
+        entity_mentions, entity_mention_ids = update_mention_id(entity_mentions, dataset_name)
+
+    with open(dataset_path / "event_mentions.json", "r", encoding="utf-8") as file:
+        event_mentions = json.load(file)
+        event_mentions, events_mention_ids = update_mention_id(event_mentions, dataset_name)
+
+    return event_mentions, entity_mentions, events_mention_ids, entity_mention_ids
+
+
+class uCDCRDataSet(DataSet):
+    def __init__(self, config, split: Split):
+        super(uCDCRDataSet, self).__init__(name="uCDCR")
+        self.split = split
+        self.pairs = []
+        mentions_event = []
+        mentions_entity = []
+        self.dataset_components = []
+        self.setting = config.setting
+        self.target_dataset = config.test_dataset_names[0] if self.setting in [DatasetSetting.single, DatasetSetting.excluding_target] else None
+        dataset_folder = Path(config.dataset_folder)
+        self.topics = Topics()
+        # in case of test datasets, these lists of ids will help split into only events and only entities
+        self.mention_ids_events, self.mention_ids_entities = [], []
+        self.positive_pairs = []
+        self.negative_pairs = []
+
+        if split == Split.train:
+            # save the attributes related to train
+            self.type_of_pairs = MentionPairStrategy(config.type_of_pairs)
+            self.ratio = config.ratio
+            self.max_pairs = config.max_pairs_train
+            self.dataset_scope = ScopeConfig(config.train_scope)
+
+            # check if single, then other datasets are ignores
+            if self.setting == DatasetSetting.single and len(config.train_dataset_names) > 1:
+                logger.warning(f'More datasets provided in the "single" setting. Only the target dataset will be used as training data. ')
+                config.train_dataset_names = config.test_dataset_names
+
+            # read the train data
+            for dataset_name in config.train_dataset_names:
+                if self.setting == DatasetSetting.excluding_target and dataset_name in config.test_dataset_names:
+                    continue
+
+                split_folder = dataset_folder / dataset_name / split.value
+                event_mentions, entity_mentions, mention_ids_events, mention_ids_entities = read_mention_files(
+                    split_folder, dataset_name)
+                self.mention_ids_events.extend(mention_ids_events)
+                self.mention_ids_entities.extend(mention_ids_entities)
+                if len(event_mentions) + len(event_mentions) == 0:
+                    logger.warning(
+                        f'No training data for {dataset_name}. Skipped ')
+                else:
+                    self.dataset_components.append(dataset_name)
+                    mentions_event.extend(event_mentions)
+                    mentions_entity.extend(entity_mentions)
+
+        elif split == Split.dev:
+            if self.setting == DatasetSetting.single and len(config.train_dataset_names) > 1:
+                logger.warning(f'More datasets provided in the "single" setting. Only the target dataset will be used as dev data. ')
+                config.train_dataset_names = config.test_dataset_names
+
+            # save the attributes related to train
+            self.type_of_pairs = MentionPairStrategy.all
+            self.ratio = -1
+            self.max_pairs = config.max_pairs_dev
+            self.dataset_scope = ScopeConfig(config.dev_scope)
+
+            # read the dev data
+            for dataset_name in config.train_dataset_names:
+                if self.setting == DatasetSetting.excluding_target and dataset_name in config.test_dataset_names:
+                    continue
+
+                split_folder = dataset_folder / dataset_name / split.value
+                event_mentions, entity_mentions, mention_ids_events, mention_ids_entities = read_mention_files(
+                    split_folder, dataset_name)
+                self.mention_ids_events.extend(mention_ids_events)
+                self.mention_ids_entities.extend(mention_ids_entities)
+                self.dataset_components.append(dataset_name)
+                mentions_event.extend(event_mentions)
+                mentions_entity.extend(entity_mentions)
+        else:
+            # test
+            self.type_of_pairs = MentionPairStrategy.all
+            self.ratio = -1
+            self.max_pairs = None
+            self.dataset_scope = ScopeConfig(config.test_scope)
+
+            # read the dev data
+            if self.setting in [DatasetSetting.excluding_target, DatasetSetting.single] and len(config.test_dataset_names) > 1:
+                logger.warning(f"The experiments do not have a concept for evaluation of several datasets while training on a single one yet. ")
+
+            for dataset_name in config.test_dataset_names:
+                split_folder = dataset_folder / dataset_name / split.value
+                event_mentions, entity_mentions, mention_ids_events, mention_ids_entities = read_mention_files(split_folder, dataset_name)
+                self.mention_ids_events.extend(mention_ids_events)
+                self.mention_ids_entities.extend(mention_ids_entities)
+                self.dataset_components.append(dataset_name)
+                mentions_event.extend(event_mentions)
+                mentions_entity.extend(entity_mentions)
+
+        self.topics.create_from_mention_list(mentions_event + mentions_entity, topic_scope=self.dataset_scope)
+        # generate clusters
+        self.topics.convert_to_clusters()
+
+    def generate_pairs(self):
+        """
+        Generate pairs depending on the method for the pair generation
+        """
+        # TODO check the given limit, the ratio, and the type of pairs, and dataset scope
+        if self.ratio == -1 and self.type_of_pairs == MentionPairStrategy.all and self.max_pairs == None:
+            self.create_all_pairs()
+        pass
+
+    def create_all_pairs(self):
+        # create positive examples
+        for topic in self.topics.topics_dict.values():
+            for i, mention1 in enumerate(topic.mentions):
+                if i + 1 == len(topic.mentions):
+                    break
+                # iterate over the upper triangle of the matrix
+                for mention2 in topic.mentions[i + 1:]:
+                    if mention1.coref_chain == mention2.coref_chain:
+                        self.positive_pairs.append((mention1, mention2))
+                    else:
+                        self.negative_pairs.append((mention1, mention2))
+
+    @staticmethod
+    def from_ecb_subtopic_to_topic(topics):
+        new_topics = Topics()
+        for sub_topic in topics.topics_dict.values():
+            id_num_groups = re.search(r"\b(\d+)\D+", str(sub_topic.topic_id))
+            if id_num_groups is not None:
+                id_num = id_num_groups.group(1)
+                ret_topic = new_topics.get_topic_by_id(id_num)
+                if ret_topic is None:
+                    ret_topic = Topic(id_num)
+                    new_topics.topics_dict[ret_topic.topic_id] = ret_topic
+
+                ret_topic.mentions.extend(sub_topic.mentions)
+            else:
+                return topics
+
+        return new_topics
+
+
+
+
 class EcbDataSet(DataSet):
     def __init__(self, ratio=-1):
         super(EcbDataSet, self).__init__(ratio=ratio, name="ECB")
 
     @classmethod
     def create_pos_neg_pairs(cls, topics, to_topic):
-        if to_topic == TopicConfig.topic:
+        if to_topic == ScopeConfig.topic:
             topics = cls.from_ecb_subtopic_to_topic(topics)
-        elif to_topic == TopicConfig.corpus:
+        elif to_topic == ScopeConfig.corpus:
             topics.to_single_topic()
 
         # create positive examples
@@ -187,7 +384,7 @@ class WecDataSet(DataSet):
         self.split = split
 
     def create_pos_neg_pairs(self, topics, sub_topics):
-        if sub_topics == TopicConfig.corpus:
+        if sub_topics == ScopeConfig.corpus:
             topics.to_single_topic()
 
         positive_pairs = WecDataSet.create_pos_pairs(topics)
