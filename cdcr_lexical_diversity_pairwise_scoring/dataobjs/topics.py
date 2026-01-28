@@ -27,6 +27,9 @@ class Topics:
         self.topics_dict = dict()
         self.keep_order = False
         self.clusters = {}
+        self.topic_clusters = dict()
+        self.convert_to_clusters()
+        self.topics_to_datasets = dict()
 
     def topic_id_exists(self, id_to_search):
         if id_to_search in self.topics_dict:
@@ -56,7 +59,6 @@ class Topics:
 
 
     def create_from_mention_list(self, mentions, topic_scope: ScopeConfig):
-        self.topics_dict = {}
 
         if topic_scope == ScopeConfig.cross_dataset:
             self.topics_dict["uCDCR"] = Topic("uCDCR")
@@ -75,6 +77,7 @@ class Topics:
                     self.topics_dict[topic_id] = Topic(topic_id)
 
                 self.topics_dict[topic_id].mentions.append(m)
+                self.topics_to_datasets[topic_id] = m["dataset"]
 
 
     def order_mentions_by_topics(self, mentions: list[dict]) -> dict[str, Topic]:
@@ -117,11 +120,16 @@ class Topics:
 
     def convert_to_clusters(self):
         if not len(self.clusters):
-            for topic in self.topics_dict.values():
+            for t_id, topic in self.topics_dict.items():
+                self.topic_clusters[t_id] = {}
+
                 for mention in topic.mentions:
                     if mention.coref_chain not in self.clusters:
                         self.clusters[mention.coref_chain] = list()
+                    if mention.coref_chain not in self.topic_clusters[t_id]:
+                        self.topic_clusters[t_id][mention.coref_chain] = list()
                     self.clusters[mention.coref_chain].append(mention)
+                    self.topic_clusters[t_id][mention.coref_chain].append(mention)
                 # break
             return self.clusters
         else:
