@@ -29,6 +29,7 @@ class Topics:
         self.clusters = {}
         self.topic_clusters = dict()
         self.topics_to_datasets = dict()
+        self.mention_to_topic = dict()
 
     def topic_id_exists(self, id_to_search):
         if id_to_search in self.topics_dict:
@@ -78,8 +79,9 @@ class Topics:
 
                 self.topics_dict[topic_id].mentions.append(m)
                 self.topics_to_datasets[topic_id] = m.dataset
+                self.mention_to_topic[m.mention_id] = topic_id
         logger.info(f"Dataset contains {len(mentions_class_list)} mentions.")
-        logger.info(f"Dataset contains {len(self.topics_dict)} topics (defined by the scope from the config).")
+        logger.info(f"Dataset contains {len(self.topics_dict)} topics (defined by the {topic_scope.value} scope from the config).")
 
 
     def order_mentions_by_topics(self, mentions: list[dict]) -> dict[str, Topic]:
