@@ -19,7 +19,7 @@ from string import punctuation
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topic, ScopeConfig, Topics
-from cdcr_lexical_diversity_pairwise_scoring.constants import DEFAULT_RATIO, DEFAULT_DEV, DEFAULT_TRAIN, SENT_TRANSFOMER, ENCODE_BATCH, DELTA, ALLOWED_TOPICS, PROJECT_ROOT, DENOM_DELTA
+from cdcr_lexical_diversity_pairwise_scoring.constants import *
 
 random.seed(42)
 nltk.download("stopwords")
@@ -35,7 +35,7 @@ def get_sent_transformer_model(model_name: str):
     return model
 
 model_fasttext = None
-def get_fasttext_model(model_name: str = "neuml/fasttext"):
+def get_fasttext_model(model_name: str):
     global model_fasttext
     if model_fasttext is None:
         model_fasttext = StaticVectors(model_name)
@@ -219,7 +219,6 @@ class uCDCRDataSet(DataSet):
     def __init__(self, config, split: Split):
         super(uCDCRDataSet, self).__init__(name="uCDCR")
         self.split = split
-        self.pairs = []
         mentions_event = []
         mentions_entity = []
         self.dataset_components = []
@@ -390,8 +389,8 @@ class uCDCRDataSet(DataSet):
         random.shuffle(shuffled_topics)
         shuffled_clusters = dict(shuffled_topics)
 
-        # for topic_id, clusters in self.topics.topic_clusters.items():
-        for topic_id, clusters in shuffled_clusters.items():
+        for topic_id, clusters in self.topics.topic_clusters.items():
+        # for topic_id, clusters in shuffled_clusters.items():
             dataset = self.topics.topics_to_datasets[topic_id]
             if used_up_n[dataset] >= positive_n_max:
                 continue
@@ -417,13 +416,15 @@ class uCDCRDataSet(DataSet):
                 mentions_cluster_dict = {m.mention_id: m for m in mentions if m.mention_id in topic_embed_df.index.to_list()}
                 if not len(mentions_cluster_dict):
                     continue
+
                 m_ids = list(mentions_cluster_dict)
 
                 cluster_df = topic_embed_df.loc[m_ids]
                 sim = cosine_similarity(cluster_df.values)
                 threshold = float(np.mean(sim))
                 std = float(np.std(sim))
-                if threshold > 1.0 or std < 0.05:
+                if threshold > 1.0 or std < MIN_STD:
+                    logger.warning(f"Cluster {c_id} has too little lexical variation, skipped.")
                     continue
 
                 delta = std / DENOM_DELTA
@@ -501,7 +502,7 @@ class uCDCRDataSet(DataSet):
 
     def encode_mentions(self, topic_id: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
         if self.type_of_pairs == MentionPairStrategy.tfidf:
-            embed_df, sim_df = self._encode_tfidfs(topic_id)
+            embed_df, sim_df = self._encode_tfidf(topic_id)
 
         elif self.type_of_pairs == MentionPairStrategy.embedding:
             embed_df, sim_df = self._encode_embeddings(topic_id)
@@ -512,8 +513,7 @@ class uCDCRDataSet(DataSet):
             raise NotImplementedError(f"A method for the mention pair creation {self.type_of_pairs} is not implemented.")
         return embed_df, sim_df
 
-
-    def _encode_tfidfs(self, topic_id: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def _encode_tfidf(self, topic_id: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
         texts, ids = [], []
 
         for m in self.topics.topics_dict[topic_id].mentions:
@@ -521,8 +521,9 @@ class uCDCRDataSet(DataSet):
             if not len(tokens_clean):
                 continue
 
-            if m.mention_head_tfidf not in tokens_clean:
-                tokens_clean.append(m.mention_head_tfidf)
+            if m.mention_head_lemma not in tokens_clean:
+                tokens_clean.append(m.mention_head_lemma)
+
             texts.append(" ".join(tokens_clean))
             ids.append(m.mention_id)
 
@@ -538,29 +539,45 @@ class uCDCRDataSet(DataSet):
         sim_df = pd.DataFrame(sim, index=ids, columns=ids)
         return embed_df, sim_df
 
-
     def _encode_embeddings(self, topic_id: str)-> Tuple[pd.DataFrame, pd.DataFrame]:
-        texts, ids, heads = [], [], []
+        texts_dict, heads_dict = {}, {}
+        cached_path = PROJECT_ROOT / "resources" / f"{EMBEDDING.replace('/', '_')}.h5"
+        if cached_path.exists():
+            existing_embed_df = pd.read_hdf(cached_path, key="df")
+        else:
+            existing_embed_df = pd.DataFrame()
 
         for m in self.topics.topics_dict[topic_id].mentions:
             tokens_clean = self._remove_stopwords(m.tokens_text)
             if not len(tokens_clean):
                 continue
-            texts.append(tokens_clean)
-            ids.append(m.mention_id)
-            heads.append(m.mention_head)
+            texts_dict[m.mention_id] = tokens_clean
+            heads_dict[m.mention_id] = m.mention_head
+
+        mentions_to_index = list(set(texts_dict) - set(existing_embed_df.index.to_list()))
+        texts_dict_to_use = {m: texts_dict[m] for m in mentions_to_index}
 
         embeddings = list()
-        for tokens, head in zip(texts, heads):
-            vector = self._encode_sentence(tokens, head)
+        for m_id, tokens in texts_dict_to_use.items():
+            vector = self._encode_sentence(tokens, heads_dict[m_id])
             embeddings.append(vector)
 
         embeddings = np.vstack(embeddings)
-        embed_df = pd.DataFrame(embeddings, index=ids)
-        sim = cosine_similarity(embeddings)
+        new_embed_df = pd.DataFrame(embeddings, index=mentions_to_index)
+        embed_df = pd.concat([existing_embed_df, new_embed_df])
 
-        sim_df = pd.DataFrame(sim, index=ids, columns=ids)
-        return embed_df, sim_df
+        embed_df.to_hdf(
+            cached_path,
+            key="df",
+            mode="w"  # "w" = overwrite, "a" = append
+        )
+
+        topic_embed_df = embed_df.loc[list(texts_dict)]
+        sim = cosine_similarity(topic_embed_df.values)
+
+        sim_df = pd.DataFrame(sim, index=topic_embed_df.index, columns=topic_embed_df.index)
+        return topic_embed_df, sim_df
+
 
     def _remove_stopwords(self, tokens: List[str]) -> List[str]:
         tokens_clean = []
@@ -575,7 +592,7 @@ class uCDCRDataSet(DataSet):
         Encode a list of mention tokens with static embeddings
         """
         global model_fasttext
-        model_fasttext = get_fasttext_model()
+        model_fasttext = get_fasttext_model(EMBEDDING)
         vectors = model_fasttext.embeddings(tokens)
 
         weights = [head_weight if t == head_token else 1.0 for t in tokens]

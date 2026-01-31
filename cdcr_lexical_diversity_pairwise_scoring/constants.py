@@ -8,6 +8,7 @@ DEFAULT_RATIO = 20
 DEFAULT_TRAIN = 40000
 DEFAULT_DEV = 8000
 SENT_TRANSFOMER = "intfloat/multilingual-e5-large"
+EMBEDDING =  "neuml/fasttext"
 ENCODE_BATCH = 8
 DELTA = 0.4
 ALLOWED_TOPICS = {
@@ -15,4 +16,5 @@ ALLOWED_TOPICS = {
     "HyperCoref": ["gma", "international", "politics", "business", "blotter", "health", "us", "abc_univision", "thetorldnewser", 'thelaw']
     # "HyperCoref": ["international", "politics", "us", "blotter"]
 }
+MIN_STD = 0.05
 DENOM_DELTA = 4
