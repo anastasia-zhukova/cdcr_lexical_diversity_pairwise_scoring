@@ -1,19 +1,19 @@
 import json
 import logging
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData, MentionuCDCR
 
 
 logger = logging.getLogger(__name__)
 
 
-class ScopeConfig(IntEnum):
-    subtopic = 1
-    topic = 2
-    corpus = 3
-    cross_dataset = 4
+class ScopeConfig(StrEnum):
+    subtopic = "subtopic"
+    topic = "topic"
+    dataset = "dataset"
+    corpus = "corpus"
 
 
 class Topic:
@@ -28,7 +28,6 @@ class Topics:
         self.keep_order = False
         self.clusters = {}
         self.topic_clusters = dict()
-        self.convert_to_clusters()
         self.topics_to_datasets = dict()
 
     def topic_id_exists(self, id_to_search):
@@ -56,28 +55,31 @@ class Topics:
             mentions = json.load(file)
 
         self.topics_dict = self.order_mentions_by_topics(mentions)
+        self.convert_to_clusters()
 
 
     def create_from_mention_list(self, mentions, topic_scope: ScopeConfig):
-
-        if topic_scope == ScopeConfig.cross_dataset:
+        mentions_class_list = MentionuCDCR.read_mentions(mentions)
+        if topic_scope == ScopeConfig.corpus:
             self.topics_dict["uCDCR"] = Topic("uCDCR")
             self.topics_dict["uCDCR"].mentions = mentions
         else:
-            for m in mentions:
+            for m in mentions_class_list:
                 if topic_scope == ScopeConfig.subtopic:
-                    topic_id = m["subtopic_id"]
+                    topic_id = m.subtopic_id
                 elif topic_scope == ScopeConfig.topic:
-                    topic_id = m["topic_id"]
+                    topic_id = m.topic_id
                 else:
                     # dataset level
-                    topic_id = m["dataset"]
+                    topic_id = m.dataset
 
                 if topic_id not in self.topics_dict:
                     self.topics_dict[topic_id] = Topic(topic_id)
 
                 self.topics_dict[topic_id].mentions.append(m)
-                self.topics_to_datasets[topic_id] = m["dataset"]
+                self.topics_to_datasets[topic_id] = m.dataset
+        logger.info(f"Dataset contains {len(mentions_class_list)} mentions.")
+        logger.info(f"Dataset contains {len(self.topics_dict)} topics (defined by the scope from the config).")
 
 
     def order_mentions_by_topics(self, mentions: list[dict]) -> dict[str, Topic]:
@@ -131,6 +133,7 @@ class Topics:
                     self.clusters[mention.coref_chain].append(mention)
                     self.topic_clusters[t_id][mention.coref_chain].append(mention)
                 # break
+            logger.info(f"Dataset contains {len(self.clusters)} clusters (some clusters are cross-topic).")
             return self.clusters
         else:
             return self.clusters

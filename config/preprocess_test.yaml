@@ -5,10 +5,10 @@ ratio: 10
 max_pairs_train: 50000
 train_scope: topic
 train_dataset_names:
+  - HyperCoref
   - ECBplus
   - ECBplusMETAm
   - GVC
-  - HyperCoref
   - MEANTIME
   - NewsWCL50
   - NiDENT
@@ -20,3 +20,4 @@ max_pairs_dev: 8000
 test_scope: subtopic
 test_dataset_names:
   - ECBplus
+  - NewsWCL50

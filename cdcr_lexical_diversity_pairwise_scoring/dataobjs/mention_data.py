@@ -1,8 +1,57 @@
 import json
 from pathlib import Path
-from typing import Literal
+from typing import Literal, List
 
 from cdcr_lexical_diversity_pairwise_scoring.utils.string_utils import SpacySyntaxAnalyzer
+
+
+class MentionuCDCR:
+    """
+    {coref_chain	"ORGVHAd9DmrNTWrtWpoyrjitp"
+    mention_id	"MvxX42fHU3oBFFwBYKSRvn"
+    tokens_str	"UNHCR"
+    description	"UNHCR"
+    coref_type	"IDENTITY"
+    mention_type	"ORG"
+    mention_full_type	"ORG"
+    tokens_text	[ "UNHCR" ]
+    tokens_number	[ 35 ]
+    mention_head	"UNHCR"
+    mention_head_id	35
+    mention_head_pos	"PROPN"
+    mention_head_lemma	"UNHCR"
+    mention_ner	"ORG"
+    sent_id	5
+    topic	"0_bomb_explosion_kidnap"
+    topic_id	"0"
+    subtopic_id	"4_tajikistan"
+    subtopic	"4_Tajikistan_hostages"
+    doc_id	"363541"
+    doc	"363541"
+    mention_context	(220)[ "U.N.", "council", "condemns", "hostage", "-", "taking", "in", "Tajikistan", ".", "UNITED", … ]
+    mention_context_start_end_id	[ 12, 231 ]
+    tokens_number_context	[ 103 ]
+    mention_head_id_context	103
+    is_singleton	false
+    conll_doc_key	"0/4_tajikistan/363541"}
+    """
+    def __init__(self, data: dict):
+        for key, value in data.items():
+            setattr(self, key, value)
+        self.mention_index = None
+
+    def __repr__(self):
+        return f"{self.mention_id}"
+
+    @classmethod
+    def read_mentions(cls, mentions: List[dict]) -> list["MentionuCDCR"]:
+        mentions_classes = []
+        for m_i, mention_dict in enumerate(mentions):
+            mention = cls(mention_dict)
+            mention.mention_index = m_i
+            mentions_classes.append(mention)
+
+        return mentions_classes
 
 
 class MentionData:

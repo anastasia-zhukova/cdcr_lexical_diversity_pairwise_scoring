@@ -9,7 +9,7 @@ import numpy as np
 import nltk
 from typing import Tuple, Dict, Union, List
 from enum import IntEnum, StrEnum
-from itertools import combinations
+from itertools import combinations, chain
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -19,7 +19,7 @@ from string import punctuation
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topic, ScopeConfig, Topics
-from cdcr_lexical_diversity_pairwise_scoring.constants import DEFAULT_RATIO, DEFAULT_DEV, DEFAULT_TRAIN, SENT_TRANSFOMER, ENCODE_BATCH, DELTA
+from cdcr_lexical_diversity_pairwise_scoring.constants import DEFAULT_RATIO, DEFAULT_DEV, DEFAULT_TRAIN, SENT_TRANSFOMER, ENCODE_BATCH, DELTA, ALLOWED_TOPICS
 
 random.seed(42)
 nltk.download("stopwords")
@@ -71,6 +71,12 @@ class MentionPairStrategy(StrEnum):
     lemma = "lemma"
     embedding = "embedding"
     encoder = "encoder"
+
+
+class EvalPairsType(StrEnum):
+    events = "events"
+    entities = "entities"
+    mix = "mix"
 
 
 class DataSet:
@@ -176,16 +182,20 @@ class DataSet:
         return False
 
 
-def update_mention_id(mentions, dataset_name: str):
+def filter_and_update_mention_attributes(mentions, dataset_name: str):
     """
     Ensure that the keys will remain unique across the datasets
     """
     mentions_new = []
     mention_ids = []
     for m in mentions:
+        if dataset_name in ALLOWED_TOPICS:
+            if m["topic"] not in ALLOWED_TOPICS[dataset_name]:
+                continue
+
         m["mention_id"] = f"{dataset_name}_{m['topic_id']}_{m['subtopic_id']}_{m['mention_id']}"
         m["dataset"] = dataset_name
-        m["coref_chain"] = f"{dataset_name}_{m['coref_chain']}"
+        m["coref_chain"] = f"{dataset_name}_{m['topic_id']}_{m['coref_chain']}"
         m["subtopic_id"] = f"{dataset_name}_{m['subtopic_id']}"
         m["topic_id"] = f"{dataset_name}_{m['topic_id']}"
         mentions_new.append(m)
@@ -196,11 +206,11 @@ def update_mention_id(mentions, dataset_name: str):
 def read_mention_files(dataset_path: Path, dataset_name: str) -> Tuple[list, list, list, list]:
     with open(dataset_path / "entity_mentions.json", "r", encoding="utf-8") as file:
         entity_mentions = json.load(file)
-        entity_mentions, entity_mention_ids = update_mention_id(entity_mentions, dataset_name)
+        entity_mentions, entity_mention_ids = filter_and_update_mention_attributes(entity_mentions, dataset_name)
 
     with open(dataset_path / "event_mentions.json", "r", encoding="utf-8") as file:
         event_mentions = json.load(file)
-        event_mentions, events_mention_ids = update_mention_id(event_mentions, dataset_name)
+        event_mentions, events_mention_ids = filter_and_update_mention_attributes(event_mentions, dataset_name)
 
     return event_mentions, entity_mentions, events_mention_ids, entity_mention_ids
 
@@ -221,13 +231,15 @@ class uCDCRDataSet(DataSet):
         self.mention_ids_events, self.mention_ids_entities = [], []
         self.positive_pairs = []
         self.negative_pairs = []
+        self.positive_pairs_eval_format = {}
+        self.negative_pairs_eval_format = {}
 
         if split == Split.train:
             # save the attributes related to train
             self.type_of_pairs = MentionPairStrategy(config.type_of_pairs)
             self.ratio = config.ratio
             self.max_pairs = config.max_pairs_train
-            self.dataset_scope = ScopeConfig(config.train_scope)
+            self.dataset_scope = config.train_scope
 
             # check if single, then other datasets are ignores
             if self.setting == DatasetSetting.single and len(config.train_dataset_names) > 1:
@@ -244,7 +256,7 @@ class uCDCRDataSet(DataSet):
                     split_folder, dataset_name)
                 self.mention_ids_events.extend(mention_ids_events)
                 self.mention_ids_entities.extend(mention_ids_entities)
-                if len(event_mentions) + len(event_mentions) == 0:
+                if len(event_mentions) + len(entity_mentions) == 0:
                     logger.warning(
                         f'No training data for {dataset_name}. Skipped ')
                 else:
@@ -261,7 +273,7 @@ class uCDCRDataSet(DataSet):
             self.type_of_pairs = MentionPairStrategy.all
             self.ratio = -1
             self.max_pairs = config.max_pairs_dev
-            self.dataset_scope = ScopeConfig(config.dev_scope)
+            self.dataset_scope = config.dev_scope
 
             # read the dev data
             for dataset_name in config.train_dataset_names:
@@ -281,11 +293,10 @@ class uCDCRDataSet(DataSet):
             self.type_of_pairs = MentionPairStrategy.all
             self.ratio = -1
             self.max_pairs = None
-            self.dataset_scope = ScopeConfig(config.test_scope)
+            self.dataset_scope = config.test_scope
 
-            # read the dev data
-            if self.setting in [DatasetSetting.excluding_target, DatasetSetting.single] and len(config.test_dataset_names) > 1:
-                logger.warning(f"The experiments do not have a concept for evaluation of several datasets while training on a single one yet. ")
+            if self.dataset_scope == ScopeConfig.corpus and len(config.test_dataset_names) > 1:
+                raise ValueError(f"The configuration of the {self.dataset_scope} and more than one test dataset can't be possible for the dataset preparation. Change the scope to {ScopeConfig.dataset}.")
 
             for dataset_name in config.test_dataset_names:
                 split_folder = dataset_folder / dataset_name / split.value
@@ -300,22 +311,54 @@ class uCDCRDataSet(DataSet):
         # generate clusters
         self.topics.convert_to_clusters()
 
+        # topic_subtopic_dict = {}
+        # for m in mentions_event + mentions_entity:
+        #     if m["dataset"] != "HyperCoref":
+        #         continue
+        #
+        #     if m["topic"] not in topic_subtopic_dict:
+        #         topic_subtopic_dict[m["topic"]] = {}
+        #     if m["subtopic"] not in topic_subtopic_dict[m["topic"]]:
+        #         topic_subtopic_dict[m["topic"]][m["subtopic"]] = []
+        #     topic_subtopic_dict[m["topic"]][m["subtopic"]].append(m["mention_id"])
+        # a = 1
+
+    def save_dataset(self, save_path: Path):
+        with save_path.open("wb") as file:
+            pickle.dump(self, file)
+        logger.info(f"Saved positive pairs in {save_path}.")
+
+    @classmethod
+    def load(cls, path: Path) -> "uCDCRDataSet":
+        """
+        Load an instance of this class from a pickle file.
+        """
+        with path.open("rb") as f:
+            obj = pickle.load(f)
+
+        if not isinstance(obj, cls):
+            raise TypeError(f"Pickle does not contain {cls.__name__}")
+
+        return obj
+
     def generate_pairs(self):
         """
         Generate pairs depending on the method for the pair generation
         """
         if self.type_of_pairs == MentionPairStrategy.all:
             # dev
+            # both positives and negatives are capped given the max number and the ratio
             if self.max_pairs is not None and self.split == Split.dev:
                 self.create_all_pairs_capped()
 
-            # extensive dev
+            # extensive dev with all positives but negatives are capped to the ratio
             elif self.max_pairs is None and self.split == Split.dev:
                 self.create_all_pairs_negatives_capped()
 
             # test
             else:
-                self.create_all_pairs()
+                # three-level nested dictionary for the evaluation
+                self.create_all_pairs_eval_format()
 
         if self.type_of_pairs == MentionPairStrategy.random:
             if self.max_pairs is not None:
@@ -327,7 +370,9 @@ class uCDCRDataSet(DataSet):
             self.create_contrastive_pairs()
 
     def create_contrastive_pairs(self):
-        # todo custom case if max n is not provided
+        """
+        Builds mention pairs on the contrastive neighboor principle
+        """
         if self.max_pairs is None:
             if self.split == Split.train:
                 self.max_pairs = DEFAULT_TRAIN
@@ -358,12 +403,16 @@ class uCDCRDataSet(DataSet):
             topic_embed_df, sim_df = self.encode_mentions(topic_id)
 
             for c_id, mentions in shuffled_clusters.items():
+                if len(mentions) == 1:
+                    # exclude singletons from being target mentions
+                    continue
+
                 if used_up_n[dataset] >= positive_n_max:
                     break
 
                 # compute the threshold
                 # some mentions could have been illuminated if no vector was computed for them, e.g., after the stopword removal in the embedding method
-                mentions_dict = {m["mention_id"]: m for m in mentions if m["mention_id"] in topic_embed_df.index.to_list()}
+                mentions_dict = {m.mention_id: m for m in mentions if m.mention_id in topic_embed_df.index.to_list()}
                 m_ids = list(mentions_dict)
 
                 cluster_df = topic_embed_df.loc[m_ids]
@@ -439,14 +488,14 @@ class uCDCRDataSet(DataSet):
         texts, ids = [], []
 
         for m in self.topics.topics_dict[topic_id]:
-            tokens_clean = self._remove_stopwords(m["tokens_text"])
+            tokens_clean = self._remove_stopwords(m.tokens_text)
             if not len(tokens_clean):
                 continue
 
-            if m["mention_head_lemma"] not in tokens_clean:
-                tokens_clean.append(m["mention_head_lemma"])
+            if m.mention_head_lemma not in tokens_clean:
+                tokens_clean.append(m.mention_head_lemma)
             texts.append(" ".join(tokens_clean))
-            ids.append(m["mention_id"])
+            ids.append(m.mention_id)
 
         vectorizer = TfidfVectorizer(
             lowercase=True,
@@ -465,12 +514,12 @@ class uCDCRDataSet(DataSet):
         texts, ids, heads = [], [], []
 
         for m in self.topics.topics_dict[topic_id]:
-            tokens_clean = self._remove_stopwords(m["tokens_text"])
+            tokens_clean = self._remove_stopwords(m.tokens_text)
             if not len(tokens_clean):
                 continue
             texts.append(tokens_clean)
-            ids.append(m["mention_id"])
-            heads.append(m["mention_head"])
+            ids.append(m.mention_id)
+            heads.append(m.mention_head)
 
         embeddings = list()
         for tokens, head in zip(texts, heads):
@@ -514,8 +563,8 @@ class uCDCRDataSet(DataSet):
         model = get_sent_transformer_model(SENT_TRANSFOMER)
         texts, ids = [], []
         for m in self.topics.topics_dict[topic_id]:
-            texts.append(m["tokens_str"])
-            ids.append(m["mention_id"])
+            texts.append(m.tokens_str)
+            ids.append(m.mention_id)
 
         embeddings = model.encode(
             texts,
@@ -538,37 +587,48 @@ class uCDCRDataSet(DataSet):
 
         # compute max per dataset component
         if self.ratio > -1:
-            positive_n_max = self.max_pairs * len(self.dataset_components) // (1 + self.ratio)
+            ratio = self.ratio
+            positive_n_max = self.max_pairs // (1 + self.ratio) // len(self.dataset_components)
         else:
             # make a default ratio 20 as in SOTA
-            positive_n_max = self.max_pairs * len(self.dataset_components) // (1 + DEFAULT_RATIO)
+            ratio = DEFAULT_RATIO
+            positive_n_max = self.max_pairs  // (1 + DEFAULT_RATIO) // len(self.dataset_components)
 
         used_up_n = {d: 0 for d in self.dataset_components}
         not_used_mentions_pairs = {d: [] for d in self.dataset_components}
+        used_topics = {}
 
-        for topic_id, clusters in self.topics.topic_clusters.items():
-            shuffled_clusters = list(clusters.items())
-            random.shuffle(shuffled_clusters)
-            shuffled_clusters = dict(shuffled_clusters)
+        shuffled_clusters = list(self.topics.clusters.items())
+        random.shuffle(shuffled_clusters)
+        shuffled_clusters = dict(shuffled_clusters)
 
-            for c_id, mentions in shuffled_clusters.items():
-                dataset = mentions[0]["dataset"]
-                if used_up_n[dataset] == positive_n_max:
-                    break
+        for c_id, mentions in shuffled_clusters.items():
+            if len(mentions) == 1:
+                continue
 
-                triangle_n = len(mentions) * (len(mentions) - 1) // 2
-                # limit positives to sqrt 6
-                max_local_pairs = min(triangle_n, int(6 * math.sqrt(triangle_n)))
+            dataset = mentions[0].dataset
+            if used_up_n[dataset] == positive_n_max:
+                continue
 
-                # create the upper triangle
-                triangle_pairs = list(combinations(mentions, 2))
-                random.shuffle(triangle_pairs)
+            triangle_n = len(mentions) * (len(mentions) - 1) // 2
+            # limit positives to sqrt 6
+            max_local_pairs = min(triangle_n, int(6 * math.sqrt(triangle_n)))
 
-                # limit to what is still there to take up
-                max_to_take = min(max_local_pairs, positive_n_max - used_up_n[dataset])
-                self.positive_pairs.extend(triangle_pairs[:max_to_take])
-                not_used_mentions_pairs[dataset].extend(triangle_pairs[max_to_take:])
-                used_up_n[dataset] += max_to_take
+            # create the upper triangle
+            triangle_pairs = list(combinations(mentions, 2))
+            random.shuffle(triangle_pairs)
+
+            # limit to what is still there to take up
+            max_to_take = min(max_local_pairs, positive_n_max - used_up_n[dataset])
+            self.positive_pairs.extend(triangle_pairs[:max_to_take])
+            not_used_mentions_pairs[dataset].extend(triangle_pairs[max_to_take:])
+            used_up_n[dataset] += max_to_take
+
+            topic_id = mentions[0].topic_id
+            if topic_id not in used_topics:
+                used_topics[topic_id] = list()
+
+            used_topics[topic_id].append(set(m.mention_id for m in mentions))
 
         for d in self.dataset_components:
             # if we didn't get enough positive pairs per dataset, take the missing pairs from the not used pairs
@@ -577,24 +637,72 @@ class uCDCRDataSet(DataSet):
                 self.positive_pairs.extend(not_used_mentions_pairs[d][:diff])
 
         negative_n_max = (self.max_pairs - positive_n_max * len(self.dataset_components)) // len(self.dataset_components)
-        self._create_capped_negatives({d: negative_n_max for d in self.dataset_components})
+        self._create_capped_negatives({d: negative_n_max for d in self.dataset_components}, used_topics, ratio)
 
+    def create_all_pairs_eval_format(self):
+        """
+        Creates mention pairs on the level suitable for evaluation:
+        - dataset_name
+            - scope_name (e.g., subtopic)
+                - events (e.g., pairs on the event level)
+                - entities (e.g., pairs on the entity level)
+                - mix (e.g., mixed pairs of events and entities level)
+        """
+        dataset_dict = {}
+        for t, d in self.topics.topics_to_datasets.items():
+            if d not in dataset_dict:
+                dataset_dict[d] = []
+            dataset_dict[d].append(t)
 
-    def create_all_pairs(self) -> Dict[str, int]:
+        for dataset, topics in dataset_dict.items():
+            self.positive_pairs_eval_format[dataset] = {}
+            self.negative_pairs_eval_format[dataset] = {}
+
+            for topic_id in topics:
+                self.positive_pairs_eval_format[dataset][topic_id] = {}
+                self.negative_pairs_eval_format[dataset][topic_id] = {}
+
+                for pairs_type in [EvalPairsType.events, EvalPairsType.entities, EvalPairsType.mix]:
+                    self.positive_pairs_eval_format[dataset][topic_id][pairs_type.value] = []
+                    self.negative_pairs_eval_format[dataset][topic_id][pairs_type.value] = []
+
+                    if pairs_type == EvalPairsType.events:
+                        mentions = [m for m in self.topics.topics_dict[topic_id].mentions if m.mention_id in self.mention_ids_events]
+                    elif pairs_type == EvalPairsType.entities:
+                        mentions = [m for m in self.topics.topics_dict[topic_id].mentions if m.mention_id in self.mention_ids_entities]
+                    else:
+                        mentions = self.topics.topics_dict[topic_id].mentions
+
+                    triangle_pairs = list(combinations(mentions, 2))
+
+                    for mention1, mention2 in triangle_pairs:
+                        if mention1.coref_chain == mention2.coref_chain:
+                            self.positive_pairs_eval_format[dataset][topic_id][pairs_type.value].append((mention1, mention2))
+                        else:
+                            self.negative_pairs_eval_format[dataset][topic_id][pairs_type.value].append((mention1, mention2))
+
+    def create_all_pairs(self) -> Tuple[Dict[str, int], dict]:
         """
         Creates all permutations of the pairs in the upper triangle and splits into positive and negatives
         """
-        self.positive_pairs, self.negative_pairs = [], []
         positive_counter = {d: 0 for d in self.dataset_components}
         for topic in self.topics.topics_dict.values():
             triangle_pairs = list(combinations(topic.mentions, 2))
             for mention1, mention2 in triangle_pairs:
                 if mention1.coref_chain == mention2.coref_chain:
                     self.positive_pairs.append((mention1, mention2))
-                    positive_counter[mention1["dataset"]] += 1
+                    positive_counter[mention1.dataset] += 1
                 else:
                     self.negative_pairs.append((mention1, mention2))
-        return positive_counter
+
+        used_topics = {}
+        for topic, clusters in self.topics.topic_clusters.items():
+            used_topics[topic] = []
+
+            for c_id, mentions in clusters.items():
+                used_topics[topic].append({m.mention_id for m in mentions})
+
+        return positive_counter, used_topics
 
 
     def create_all_pairs_negatives_capped(self):
@@ -602,27 +710,40 @@ class uCDCRDataSet(DataSet):
         Just in case we want all positives but not overwhelm with negatives. Does not balance per dataset,
         so the number of negatives will be proportional to the number of positives per dataset.
         """
-        positive_counter_datasets = self.create_all_pairs()
+        positive_counter_datasets, used_topics = self.create_all_pairs()
         ratio = self.ratio if self.ratio > -1 else DEFAULT_RATIO
         negative_counter_datasets = {d: ratio * pos for d, pos in positive_counter_datasets}
-        self._create_capped_negatives(negative_counter_datasets)
+        self._create_capped_negatives(negative_counter_datasets, used_topics, ratio)
 
 
-    def _create_capped_negatives(self, max_topic_negatives: dict):
+    def _create_capped_negatives(self, max_topic_negatives: dict, used_topics: dict, ratio: int):
         """
-        Creates all permutations of the pairs in the upper triangle and splits into positive and negatives
+        Stratified negative creation based on the positive pairs
         """
-        self.negative_pairs = []
-        for topic in self.topics.topics_dict.values():
-            negative_pairs_topic = []
-            triangle_pairs = list(combinations(topic.mentions, 2))
-            for mention1, mention2 in triangle_pairs:
-                if mention1.coref_chain != mention2.coref_chain:
-                    negative_pairs_topic.append((mention1, mention2))
-                    if len(negative_pairs_topic) == max_topic_negatives[mention1["dataset"]]:
-                        break
+        negative_pairs_dataset = {d: [] for d in list(max_topic_negatives)}
 
-            self.negative_pairs.extend(negative_pairs_topic)
+        for t_id, topic in self.topics.topics_dict.items():
+            dataset = self.topics.topics_to_datasets[t_id]
+
+            if t_id not in used_topics:
+                continue
+
+            mention_ids = {m.mention_id for m in topic.mentions}
+            for positive_mentions_cluster in used_topics[t_id]:
+                # all other mentions outside a cluster are negatives
+                negative_candidate = mention_ids - positive_mentions_cluster
+                # all combinations of the positive mentions
+                pos_num_pairs = len(positive_mentions_cluster) * (len(positive_mentions_cluster) - 1) // 2
+                neg_num_pairs = pos_num_pairs * ratio
+                # we will need a permutation of the positive mentions with some selected negatives, so the number is the target number of pairs given a cluster divided by the cluster size
+                neg_num = neg_num_pairs // len(positive_mentions_cluster)
+                negative_mentions = random.sample(list(negative_candidate), neg_num)
+                negative_pairs = [(a, b) for a in positive_mentions_cluster for b in negative_mentions]
+                negative_pairs_dataset[dataset].extend(negative_pairs)
+
+        for d, negatives in negative_pairs_dataset.items():
+            random.shuffle(negatives)
+            self.negative_pairs.extend(negatives[:max_topic_negatives[d]])
 
 
 

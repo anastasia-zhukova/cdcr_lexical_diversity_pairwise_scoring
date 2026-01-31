@@ -1,9 +1,16 @@
 import json
 import os
+from typing import Union, List
 from pathlib import Path
 
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, MentionPairStrategy, ScopeConfig
+
+
+def create_dataset_name(split: Split, type_of_pairs: MentionPairStrategy, scope: ScopeConfig, max_pairs: Union[int, None], dataset_components: List[str]):
+    return PROJECT_ROOT / "resources" / f"{split.value}_{type_of_pairs.value}_{scope.value}_{max_pairs}_{'-'.join(dataset_components)}.pickle"
+
 
 
 def write_coref_scorer_results(

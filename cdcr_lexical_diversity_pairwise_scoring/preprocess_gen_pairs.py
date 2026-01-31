@@ -11,7 +11,7 @@ Options:
     --topic=<type>  subtopic/topic/corpus - relevant only to ECB+, take pairs only from the same sub-topic, topic or corpus wide [default: corpus]
 
 """
-
+import json
 import pickle
 import random
 from dataclasses import dataclass
@@ -23,74 +23,79 @@ from hydra.core.config_store import ConfigStore
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split, uCDCRDataSet
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, uCDCRDataSet, MentionPairStrategy, DatasetSetting
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import ScopeConfig
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_dataset_name
 
+CONFIG_NAME = "preprocess_test"
 
 @dataclass
 class Config:
     dataset_folder: Path
-    setting: str
-    type_of_pairs: str
+    setting: DatasetSetting
+    type_of_pairs: MentionPairStrategy
     ratio: int
     max_pairs_train: int
     train_scope: ScopeConfig
     train_dataset_names: List[str]
     dev_scope: ScopeConfig
+    dev_type_of_pairs: MentionPairStrategy
     max_pairs_dev: int
     test_scope: ScopeConfig
     test_dataset_names: List[str]
 
 
 cs = ConfigStore.instance()
-cs.store(name="preprocess_gen_pairs_config", node=Config)
+cs.store(name=CONFIG_NAME, node=Config)
 
 
-@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name="preprocess_gen_pairs_config")
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
 def main(config: Config) -> None:
     logger.debug(config)
     random.seed(0)
+    dataset_dict = {}
 
     for split in [Split.train, Split.dev, Split.test]:
+        logger.info(f"Generative pair for {split.value} split")
+        config.dataset_folder = PROJECT_ROOT / config.dataset_folder
         dataset = uCDCRDataSet(config, split)
 
         if split == Split.train:
-            scope = config.train_scope.value
+            scope = config.train_scope
             max_pairs = config.max_pairs_train
             type_of_pairs = config.type_of_pairs
-        elif split.value == Split.dev:
-            scope = config.dev_scope.value
-            max_pairs = config.max_pairs_dev
-            type_of_pairs = "all"
-        else:
-            scope = config.test_scope.value
-            max_pairs = "all"
-            type_of_pairs = "all"
 
-        save_path = PROJECT_ROOT / "resources" / f"{split.value}_{type_of_pairs}_{scope}_{max_pairs}_{'-'.join(dataset.dataset_components)}.pickle"
+        elif split == Split.dev:
+            scope = config.dev_scope
+            max_pairs = config.max_pairs_dev
+            type_of_pairs = config.dev_type_of_pairs
+            # type_of_pairs = MentionPairStrategy.all
+
+        else:
+            scope = config.test_scope
+            max_pairs = None
+            type_of_pairs = MentionPairStrategy.all
+
+        save_path = create_dataset_name(split, type_of_pairs, scope, max_pairs, dataset.dataset_components)
         if save_path.exists():
-            logger.info(f"A dataset for {split} with the same config already exists. Skipped.")
+            logger.info(f"A dataset for {split.value} with the same config already exists. Skipped.")
 
         logger.info(f"Generating pairs for file: {split}")
-        # TODO
         dataset.generate_pairs()
-        # TODO
         dataset.save_dataset(save_path)
+        dataset_dict[split.value] = str(save_path)
 
-    # TODO save dataset
-    # dirname = Path(dataset_folder).parent
-    # basename = Path(dataset_folder).stem
-    #
-    # positive_file_path = dirname / f"{basename}_PosPairs.pickle"
-    # with positive_file_path.open("wb") as file:
-    #     pickle.dump(positive, file)
-    # logger.info(f"Saved positive pairs in {positive_file_path}.")
-    #
-    # negative_file_path = dirname / f"{basename}_NegPairs.pickle"
-    # with negative_file_path.open("wb") as file:
-    #     pickle.dump(negative, file)
-    # logger.info(f"Saved negative pairs in {negative_file_path}.")
+    # save all paths to the created datasets for this experiment
+    # TODO Sergei: save the config into a yaml file
+    file_name = f'datasets_{"_".join(CONFIG_NAME.split("_")[1:])}.json'
+    with open(PROJECT_ROOT / "config" / file_name, "w", encoding="utf-8") as file:
+        json.dump(dataset_dict, file)
+
+    logger.info(f"The paths to the created datasets for the current experiment config is saved in: {file_name}")
 
 
 if __name__ == "__main__":
+    # TODO Sergei: proper reading specific config to each experiment
+    # CONFIG_NAME = "preprocess_test"
+    # cs.store(name=CONFIG_NAME, node=Config)
     main()
