@@ -27,6 +27,7 @@ from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, uCDC
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import ScopeConfig
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_dataset_name
 
+# TODO Sergei: fix the configs to be pluggable for each experiment
 CONFIG_NAME = "preprocess_test"
 
 @dataclass
@@ -78,7 +79,8 @@ def main(config: Config) -> None:
 
         save_path = create_dataset_name(split, type_of_pairs, scope, max_pairs, dataset.dataset_components)
         if save_path.exists():
-            logger.info(f"A dataset for {split.value} with the same config already exists. Skipped.")
+            logger.info(f"A dataset for {split.value} with the same config (path {str(save_path)}) already exists. Skipped.")
+            continue
 
         dataset.generate_pairs()
         dataset.save_dataset(save_path)

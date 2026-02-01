@@ -112,7 +112,7 @@ def main(arguments):
             embeddings_file_path=_embed_file,
             use_cuda=_use_cuda,
         )
-    # TODO: this seems weird, like other model are expected to be here?
+    # same-lemma-head baseline
     elif _extract_method == RelationTypeEnum.same_head_lemma:
         model = HeadLemmaRelationExtractor()
     else:

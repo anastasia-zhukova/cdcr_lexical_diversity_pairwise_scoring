@@ -115,7 +115,7 @@ class TestEmbeddings(unittest.TestCase):
             encoded = list(torch.tensor(config.tokenizer.encode(mention.tokens_str)[1:-1]))
             decoded = config.tokenizer.decode(encoded)
 
-            ment1_ids, ment1_inx_start, ment1_inx_end = config.mention_feat_to_vec(mention)
+            ment1_ids, ment1_inx_start, ment1_inx_end = config.encode_mention(mention)
             self.assertTrue(ment1_ids.shape[1] < 512, str(mention.mention_id) + " Has more then 512 tokens")
 
             from_method = list(ment1_ids[0][ment1_inx_start:ment1_inx_end])

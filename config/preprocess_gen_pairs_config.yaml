@@ -9,7 +9,6 @@ train_dataset_names:
   - ECBplusMETAm
   - GVC
   - HyperCoref
-  - MEANTIME
   - NewsWCL50
   - NiDENT
   - NP4E

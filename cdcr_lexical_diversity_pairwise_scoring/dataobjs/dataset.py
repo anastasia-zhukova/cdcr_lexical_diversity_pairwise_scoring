@@ -388,9 +388,10 @@ class uCDCRDataSet(DataSet):
         shuffled_topics = list(self.topics.topic_clusters.items())
         random.shuffle(shuffled_topics)
         shuffled_clusters = dict(shuffled_topics)
+        next_report_milestone = 0.1
 
-        for topic_id, clusters in self.topics.topic_clusters.items():
-        # for topic_id, clusters in shuffled_clusters.items():
+        # for topic_id, clusters in self.topics.topic_clusters.items():
+        for topic_id, clusters in shuffled_clusters.items():
             dataset = self.topics.topics_to_datasets[topic_id]
             if used_up_n[dataset] >= positive_n_max:
                 continue
@@ -504,6 +505,9 @@ class uCDCRDataSet(DataSet):
                         all_mention_pairs[dataset][c_id]["neg_easy"].update(set(uCDCRDataSet._make_pairs_with_target(target_mention_id, neg_easy, mentions_topic_dict, max_num=num_pairs_per_neg_type - len(hard_negative_pairs))))
 
                 used_up_n[dataset] += len(all_mention_pairs[dataset][c_id]["pos_easy"]) + len(all_mention_pairs[dataset][c_id]["pos_hard"])
+                if used_up_n[dataset] / positive_n_max >= next_report_milestone:
+                    logger.info(f"Collected at least {next_report_milestone * 100}% of the {positive_n_max} positive pairs for {dataset}.")
+                    next_report_milestone += 0.1
 
         self.total_types = {}
         for dataset, clusters_per_dataset in all_mention_pairs.items():
@@ -650,7 +654,7 @@ class uCDCRDataSet(DataSet):
             existing_embed_df = pd.DataFrame()
 
         texts_dict = {}
-        for m in self.topics.topics_dict[topic_id].mentions[:1000]:
+        for m in self.topics.topics_dict[topic_id].mentions:
             texts_dict[m.mention_id] = m.tokens_str
 
         mentions_to_index = list( set(texts_dict) - set(existing_embed_df.index.to_list()))

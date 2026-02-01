@@ -1,6 +1,82 @@
-# Cross Document Event Coreferecne Model
-This project model code was used in the paper <a href="https://www.aclweb.org/anthology/2021.naacl-main.198/">״WEC: Deriving a Large-scale Cross-document Event Coreference dataset from Wikipedia״</a> for the cross document event coreference baseline model for WEC-Eng. 
+# LexCDCR: Cross-Document Coreference Resolution under High Lexical Diversity
+TODO AZ: project description
  
+## uCDCR dataset
+The uCDCR dataset used in this project is available under TODO.
+Specifically we used the following news datasets: 
+  - ECBplus
+  - ECBplusMETAm
+  - GVC
+  - HyperCoref
+  - NewsWCL50
+  - NiDENT
+  - NP4E
+  - WECEng
+
+## Setup
+- Python 3.12
+- TODO Sergei
+
+To automatically download the uCDCR dataset, use the following script: TODO AZ
+```
+python setup.py
+```
+
+## Folder with experiment configs 
+The folder with all experiment configs for reproduction: 
+```
+config/experiments
+```
+TODO AZ: description of the experiments
+TODO AZ desciption of the config fields
+TODO AZ: a code for the lemma baseline is in the uCDCR project, give a link
+
+## 1. Preprocessing
+### 1.1 Generate mentions pairs
+The script creates mention pairs 
+TODO Sergei: make the experiment configs pluggable
+
+```
+python src/preprocess_gen_pairs.py config_to_experiment.yaml
+```
+
+### 1.2. Generate Embeddings
+To generate the embeddings for the datasets in a given experiment, run the following script:
+```
+python src/preprocess_embed.py config_to_experiment.yaml
+```
+Note that to save space, the cached vectors are reused across the experiments and the same cached file will be updated should more datasets be selected.
+
+## 2. Training
+See `train.py` file header for the complete set of script parameters.
+Model file will be saved at output folder (for each iteration that improves).
+- For training over ECB+:<br/>
+```
+python src/train.py --tpf=resources/ecb/train/Event_gold_mentions_PosPairs.pickle --tnf=resources/ecb/train/Event_gold_mentions_NegPairs.pickle --dpf=resources/ecb/dev/Event_gold_mentions_PosPairs.pickle --dnf=resources/ecb/dev/Event_gold_mentions_NegPairs.pickle --te=resources/ecb/train/Event_gold_mentions_roberta_large.pickle --de=resources/ecb/dev/Event_gold_mentions_roberta_large.pickle --mf=ecb_pairwise_model --dataset=ecb --cuda=True
+```
+
+
+## 3. Inference
+### 3.1. Mention pairs scoring and clustering
+Running agglomerative clustering to get the final cluster configuration on the pairwise predictions.
+See `cluster.py` file header for the complete set of script parameters.<br/>
+Running the pairs prediction algorithm:
+```
+python src/cluster.py --tmf=resources/ecb/test/Event_gold_mentions.json --predictions=<checkpoint>/ecb_predictions --alt=0.7
+```
+
+### 3.2. Calculating evaluation metrics
+To score our model we used the official <a href="https://github.com/conll/reference-coreference-scorers">CoNLL coreference scorer</a>.<br/>
+Gold scorer files are at `gold_socrer/ecb/*` folder.<br/>
+TODO Sergei: Provide a specific experiment config if you want to score the results only from it. By default, the script creates a summary table with all results of all experiments. 
+
+```
+python cdcr_lexical_diversity_pairwise_scoring/scoring config_to_experiment.yaml
+```
+ 
+
+
+# (OLD) Original README 
 ## WEC-Eng Pre-trained Model
 Can be downloaded from huggingface hub: <a href="https://huggingface.co/Alon/wec">https://huggingface.co/Alon/wec</a>
 

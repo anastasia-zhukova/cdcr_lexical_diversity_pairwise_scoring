@@ -14,9 +14,13 @@ logging
 output
 datasets/ecb_mal.zip
 datasets/wec_mal.zip
-datasets/ecb
-datasets/wec
+datasets
+!datasets/.gitkeep
 cdcr_lexical_diversity_pairwise_scoring/outputs
+evaluation_results/input_files/
+!evaluation_results/input_files/.gitkeep
+evaluation_results/output_files_files/
+!evaluation_results/output_files/.gitkeep
 
 # https://github.com/github/gitignore/blob/main/Python.gitignore
 
