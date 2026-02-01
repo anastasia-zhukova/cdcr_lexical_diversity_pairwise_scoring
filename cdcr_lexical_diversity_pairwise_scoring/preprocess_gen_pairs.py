@@ -56,7 +56,7 @@ def main(config: Config) -> None:
     dataset_dict = {}
 
     for split in [Split.train, Split.dev, Split.test]:
-        logger.info(f"Generative pair for {split.value} split")
+        logger.info(f"Generating pairs for {split.value} split")
         config.dataset_folder = PROJECT_ROOT / config.dataset_folder
         dataset = uCDCRDataSet(config, split)
 
@@ -80,7 +80,6 @@ def main(config: Config) -> None:
         if save_path.exists():
             logger.info(f"A dataset for {split.value} with the same config already exists. Skipped.")
 
-        logger.info(f"Generating pairs for file: {split}")
         dataset.generate_pairs()
         dataset.save_dataset(save_path)
         dataset_dict[split.value] = str(save_path)

@@ -41,7 +41,7 @@ class MentionuCDCR:
         self.mention_index = None
 
     def __repr__(self):
-        return f"{self.mention_id}"
+        return f"{self.dataset}_{self.tokens_str}"
 
     @classmethod
     def read_mentions(cls, mentions: List[dict]) -> list["MentionuCDCR"]:

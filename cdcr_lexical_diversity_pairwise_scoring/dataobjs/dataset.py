@@ -423,50 +423,86 @@ class uCDCRDataSet(DataSet):
                 sim = cosine_similarity(cluster_df.values)
                 threshold = float(np.mean(sim))
                 std = float(np.std(sim))
-                if threshold > 1.0 or std < MIN_STD:
-                    logger.warning(f"Cluster {c_id} has too little lexical variation, skipped.")
-                    continue
 
-                delta = std / DENOM_DELTA
-                # compute centroid
-                centroid = np.mean(cluster_df.values, axis=0)
-                sim_centroid = cosine_similarity([centroid], cluster_df.values)[0]
-                sim_series = pd.Series(sim_centroid, index=cluster_df.index)
-
-                # choose two target mentions: one close to centroid, one - faw away
-
-                for target_mention_id in [sim_series.idxmax(), sim_series.idxmin()]:
+                if std < MIN_STD:
+                    # logger.warning(f"Cluster {c_id} has too little lexical variation. Only easy positives selected.")
+                    all_mention_pairs[dataset][c_id] = {"pos_easy": set(), "pos_hard": set(), "neg_easy": set(),
+                                                        "neg_hard": set()}
+                    target_mention_id = cluster_df.index[0]
                     target_vector = cluster_df.loc[target_mention_id]
                     sim_target = cosine_similarity([target_vector], topic_embed_df.values)[0]
                     sim_series_target = pd.Series(sim_target, index=topic_embed_df.index)
                     sim_series_target = sim_series_target.drop(target_mention_id)
 
-                    pos_easy = list(set(sim_series_target[sim_series_target >= threshold + delta].index).intersection(set(m_ids)))
-                    pos_hard = list(set(sim_series_target[sim_series_target <= threshold - delta].index).intersection(set(m_ids)))
-                    neg_hard = list(set(sim_series_target[sim_series_target >= threshold + delta].index) - set(m_ids))
-                    neg_easy = list(set(sim_series_target[sim_series_target <= threshold - delta].index) - set(m_ids))
-                    # neg_easy = sim_series_target[sim_series_target <= threshold - DELTA].sort_values(ascending=False).index.to_list()
+                    delta = MIN_STD / DENOM_DELTA
+                    pos_easy = cluster_df.index[1:].to_list()
 
-                    # we use all positives and sample negatives
-                    num_pairs_per_pos_type = len(pos_easy) + len(pos_hard)
+                    if threshold >= 1.0:
+                        #  really no variation, so to get smth in, subtract delta
+                        neg_hard = list(
+                            set(sim_series_target[sim_series_target >= threshold - delta].index) - set(m_ids))
+                    else:
+                        neg_hard = list(set(sim_series_target[sim_series_target >= threshold + delta].index) - set(m_ids))
+
+                    # form easies that are more remote than usually
+                    neg_easy = list(set(sim_series_target[sim_series_target <= threshold - MIN_STD].index) - set(m_ids))
+                    num_pairs_per_pos_type = len(pos_easy)
                     num_pairs_per_neg_type = num_pairs_per_pos_type * ratio
 
-                    if num_pairs_per_neg_type > len(neg_easy) + len(neg_hard):
-                        # not enough negatives
-                        continue
-
-                    if c_id not in all_mention_pairs[dataset]:
-                        all_mention_pairs[dataset][c_id] = {"pos_easy": set(), "pos_hard": set(), "neg_easy": set(),
-                                                            "neg_hard": set()}
                     # use up all positives
-                    all_mention_pairs[dataset][c_id]["pos_easy"].update(set(uCDCRDataSet._make_pairs_with_target(target_mention_id, pos_easy, mentions_topic_dict, max_num=num_pairs_per_pos_type)))
-                    all_mention_pairs[dataset][c_id]["pos_hard"].update(set(uCDCRDataSet._make_pairs_with_target(target_mention_id, pos_hard, mentions_topic_dict, max_num=num_pairs_per_pos_type)))
+                    all_mention_pairs[dataset][c_id]["pos_easy"].update(
+                        set(uCDCRDataSet._make_pairs_with_target(target_mention_id, pos_easy, mentions_topic_dict,
+                                                                 max_num=num_pairs_per_pos_type)))
                     # first use up all hard negatives, then the remaining take form easy negatives
-                    hard_negative_pairs = uCDCRDataSet._make_pairs_with_target(target_mention_id, neg_hard, mentions_topic_dict, max_num=num_pairs_per_neg_type)
+                    hard_negative_pairs = uCDCRDataSet._make_pairs_with_target(target_mention_id, neg_hard,
+                                                                               mentions_topic_dict,
+                                                                               max_num=num_pairs_per_neg_type)
                     all_mention_pairs[dataset][c_id]["neg_hard"].update(set(hard_negative_pairs))
-                    all_mention_pairs[dataset][c_id]["neg_easy"].update(set(uCDCRDataSet._make_pairs_with_target(target_mention_id, neg_easy, mentions_topic_dict, max_num=num_pairs_per_neg_type - len(hard_negative_pairs))))
+                    all_mention_pairs[dataset][c_id]["neg_easy"].update(
+                        set(uCDCRDataSet._make_pairs_with_target(target_mention_id, neg_easy, mentions_topic_dict,
+                                                                 max_num=num_pairs_per_neg_type - len(
+                                                                     hard_negative_pairs))))
 
-                    a =1
+                else:
+                    delta = std / DENOM_DELTA
+                    # compute centroid
+                    centroid = np.mean(cluster_df.values, axis=0)
+                    sim_centroid = cosine_similarity([centroid], cluster_df.values)[0]
+                    sim_series = pd.Series(sim_centroid, index=cluster_df.index)
+
+                    # choose two target mentions: one close to centroid, one - faw away
+
+                    for target_mention_id in [sim_series.idxmax(), sim_series.idxmin()]:
+                        target_vector = cluster_df.loc[target_mention_id]
+                        sim_target = cosine_similarity([target_vector], topic_embed_df.values)[0]
+                        sim_series_target = pd.Series(sim_target, index=topic_embed_df.index)
+                        sim_series_target = sim_series_target.drop(target_mention_id)
+
+                        pos_easy = list(set(sim_series_target[sim_series_target >= threshold + delta].index).intersection(set(m_ids)))
+                        pos_hard = list(set(sim_series_target[sim_series_target <= threshold - delta].index).intersection(set(m_ids)))
+                        neg_hard = list(set(sim_series_target[sim_series_target >= threshold + delta].index) - set(m_ids))
+                        neg_easy = list(set(sim_series_target[sim_series_target <= threshold - delta].index) - set(m_ids))
+                        # neg_easy = sim_series_target[sim_series_target <= threshold - DELTA].sort_values(ascending=False).index.to_list()
+
+                        # we use all positives and sample negatives
+                        num_pairs_per_pos_type = len(pos_easy) + len(pos_hard)
+                        num_pairs_per_neg_type = num_pairs_per_pos_type * ratio
+
+                        if num_pairs_per_neg_type > len(neg_easy) + len(neg_hard):
+                            # not enough negatives
+                            continue
+
+                        if c_id not in all_mention_pairs[dataset]:
+                            all_mention_pairs[dataset][c_id] = {"pos_easy": set(), "pos_hard": set(), "neg_easy": set(),
+                                                                "neg_hard": set()}
+                        # use up all positives
+                        all_mention_pairs[dataset][c_id]["pos_easy"].update(set(uCDCRDataSet._make_pairs_with_target(target_mention_id, pos_easy, mentions_topic_dict, max_num=num_pairs_per_pos_type)))
+                        all_mention_pairs[dataset][c_id]["pos_hard"].update(set(uCDCRDataSet._make_pairs_with_target(target_mention_id, pos_hard, mentions_topic_dict, max_num=num_pairs_per_pos_type)))
+                        # first use up all hard negatives, then the remaining take form easy negatives
+                        hard_negative_pairs = uCDCRDataSet._make_pairs_with_target(target_mention_id, neg_hard, mentions_topic_dict, max_num=num_pairs_per_neg_type)
+                        all_mention_pairs[dataset][c_id]["neg_hard"].update(set(hard_negative_pairs))
+                        all_mention_pairs[dataset][c_id]["neg_easy"].update(set(uCDCRDataSet._make_pairs_with_target(target_mention_id, neg_easy, mentions_topic_dict, max_num=num_pairs_per_neg_type - len(hard_negative_pairs))))
+
                 used_up_n[dataset] += len(all_mention_pairs[dataset][c_id]["pos_easy"]) + len(all_mention_pairs[dataset][c_id]["pos_hard"])
 
         self.total_types = {}

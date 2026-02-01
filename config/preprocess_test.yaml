@@ -1,6 +1,6 @@
 dataset_folder: datasets/uCDCR
 setting: mix
-type_of_pairs: tfidf
+type_of_pairs: encoder
 ratio: 1
 max_pairs_train: 8000
 train_scope: topic
