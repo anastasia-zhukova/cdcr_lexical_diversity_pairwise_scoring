@@ -274,8 +274,11 @@ class uCDCRDataSet(DataSet):
                 config.train_dataset_names = self.target_datasets
 
             # save the attributes related to train
-            self.type_of_pairs = MentionPairStrategy.all
-            self.ratio = -1
+            self.type_of_pairs = config.dev_type_of_pairs
+            if self.type_of_pairs == MentionPairStrategy.all:
+                self.ratio = -1
+            else:
+                self.ratio = config.ratio
             self.max_pairs = config.max_pairs_dev
             self.dataset_scope = config.dev_scope
 
@@ -314,6 +317,14 @@ class uCDCRDataSet(DataSet):
         self.topics.create_from_mention_list(mentions_event + mentions_entity, topic_scope=self.dataset_scope)
         # generate clusters
         self.topics.convert_to_clusters()
+
+    def get_mix_pairs(self):
+        """
+        Returns all mention pairs combined
+        """
+        mixed_list = self.positive_pairs + self.negative_pairs
+        random.shuffle(mixed_list)
+        return mixed_list
 
     def save_dataset(self, save_path: Path):
         with save_path.open("wb") as file:

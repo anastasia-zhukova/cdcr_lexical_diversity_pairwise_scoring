@@ -33,17 +33,17 @@ TODO AZ: a code for the lemma baseline is in the uCDCR project, give a link
 
 ## 1. Preprocessing
 ### 1.1 Generate mentions pairs
-The script creates mention pairs 
+The script creates mention pairs given the configuration file. 
 TODO Sergei: make the experiment configs pluggable
-
+For example:
 ```
-python src/preprocess_gen_pairs.py config_to_experiment.yaml
+python src/preprocess_gen_pairs.py preprocess_text.yaml
 ```
 
 ### 1.2. Generate Embeddings
-To generate the embeddings for the datasets in a given experiment, run the following script:
+To generate the embeddings for the datasets in a given experiment, run the following script (with an examplar experiment config):
 ```
-python src/preprocess_embed.py config_to_experiment.yaml
+python src/preprocess_embed.py preprocess_text.yaml
 ```
 Note that to save space, the cached vectors are reused across the experiments and the same cached file will be updated should more datasets be selected.
 
@@ -52,7 +52,7 @@ See `train.py` file header for the complete set of script parameters.
 Model file will be saved at output folder (for each iteration that improves).
 - For training over ECB+:<br/>
 ```
-python src/train.py --tpf=resources/ecb/train/Event_gold_mentions_PosPairs.pickle --tnf=resources/ecb/train/Event_gold_mentions_NegPairs.pickle --dpf=resources/ecb/dev/Event_gold_mentions_PosPairs.pickle --dnf=resources/ecb/dev/Event_gold_mentions_NegPairs.pickle --te=resources/ecb/train/Event_gold_mentions_roberta_large.pickle --de=resources/ecb/dev/Event_gold_mentions_roberta_large.pickle --mf=ecb_pairwise_model --dataset=ecb --cuda=True
+python src/train.py preprocess_text.yaml 
 ```
 
 
@@ -75,7 +75,7 @@ python cdcr_lexical_diversity_pairwise_scoring/scoring config_to_experiment.yaml
 ```
  
 
-
+____________________________________________________________________________
 # (OLD) Original README 
 ## WEC-Eng Pre-trained Model
 Can be downloaded from huggingface hub: <a href="https://huggingface.co/Alon/wec">https://huggingface.co/Alon/wec</a>

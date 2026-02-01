@@ -22,7 +22,7 @@ import hydra
 from hydra.core.config_store import ConfigStore
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, DEFAULT_RATIO
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, uCDCRDataSet, MentionPairStrategy, DatasetSetting
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import ScopeConfig
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_dataset_name
@@ -65,19 +65,25 @@ def main(config: Config) -> None:
             scope = config.train_scope
             max_pairs = config.max_pairs_train
             type_of_pairs = config.type_of_pairs
+            ratio = config.ratio
 
         elif split == Split.dev:
             scope = config.dev_scope
             max_pairs = config.max_pairs_dev
             type_of_pairs = config.dev_type_of_pairs
+            if type_of_pairs == MentionPairStrategy.all:
+                ratio = -1
+            else:
+                ratio = config.ratio
             # type_of_pairs = MentionPairStrategy.all
 
         else:
             scope = config.test_scope
             max_pairs = None
+            ratio = -1
             type_of_pairs = MentionPairStrategy.all
 
-        save_path = create_dataset_name(split, type_of_pairs, scope, max_pairs, dataset.dataset_components)
+        save_path = create_dataset_name(split, type_of_pairs, scope, max_pairs, ratio, dataset.dataset_components)
         if save_path.exists():
             logger.info(f"A dataset for {split.value} with the same config (path {str(save_path)}) already exists. Skipped.")
             continue

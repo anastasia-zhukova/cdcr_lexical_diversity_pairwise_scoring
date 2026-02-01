@@ -99,24 +99,17 @@ class EmbedTransformersGenerics:
 class EmbedFromFile:
     def __init__(
         self,
-        files_to_load: Path | list[Path],
+        file_to_load: Path,
     ):
-        self.embed_size = 1024
         bert_dict = dict()
 
-        if isinstance(files_to_load, Path):
-            files_to_load = [files_to_load]
-
-        if files_to_load is None or len(files_to_load) == 0:
-            raise ValueError
-
-        for single_file_path in files_to_load:
-            with single_file_path.open("rb") as file:
-                loaded_file = pickle.load(file)
-                bert_dict.update(loaded_file)
-            logger.info(f"BERT representation loaded from file: {single_file_path}")
+        with file_to_load.open("rb") as file:
+            loaded_file = pickle.load(file)
+            bert_dict.update(loaded_file)
+        logger.info(f"BERT representation loaded from file: {file_to_load}")
 
         self.embeddings = list(bert_dict.values())
+        self.embed_size = self.embeddings[0][0].shape[1]
         self.embed_key = {k: i for i, k in enumerate(bert_dict.keys())}
 
     def get_mentions_rep(self, mentions_list):

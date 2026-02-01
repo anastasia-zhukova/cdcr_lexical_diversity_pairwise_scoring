@@ -1,6 +1,5 @@
 """Usage:
-    train.py --tpf=<TrainPosFile> --tnf=<TrainNegFile> --dpf=<DevPosFile> --dnf=<DevNegFile>
-                    --te=<TrainEmbed> --de=<DevEmbed> --mf=<ModelFile> [--bs=<x>] [--lr=<y>] [--ratio=<z>] [--itr=<k>]
+    train.py [--bs=<x>] [--lr=<y>] [--ratio=<z>] [--itr=<k>]
                     [--cuda=<b>] [--ft=<b1>] [--wd=<t>] [--hidden=<w>] [--dataset=<d>]
 
 Options:
@@ -18,23 +17,34 @@ Options:
 """
 
 import logging
+import pickle
 import random
+import json
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import torch
 from docopt import docopt
+from hydra.core.config_store import ConfigStore
 
 from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
-from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, get_prec_rec_f1
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path
+from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, precision_recall_f1
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path, get_dataset_name, get_model_name
 from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CACHED_VECTOR_PATH, USE_CUDA
+from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 
-
+torch.manual_seed(1234)
+random.seed(1234)
+np.random.seed(1234)
 logger = logging.getLogger(__name__)
+
+CONFIG_NAME = "preprocess_test"
+cs = ConfigStore.instance()
+cs.store(name=CONFIG_NAME, node=Config)
 
 
 def train_pairwise(
@@ -103,7 +113,7 @@ def accuracy_on_dataset(
     all_labels, all_predictions = run_inference(pairwise_model, features, batch_size=batch_size)
     accuracy = torch.mean((all_labels == all_predictions).float())
     tn, fp, fn, tp = get_confusion_matrix(all_labels, all_predictions)
-    precision, recall, f1 = get_prec_rec_f1(tp, fp, fn)
+    precision, recall, f1 = precision_recall_f1(tp, fp, fn)
 
     logger.info(
         "%s: %d: Accuracy: %.10f: precision: %.10f: recall: %.10f: f1: %.10f"
@@ -144,106 +154,93 @@ def run_inference(
 
 
 def init_basic_training_resources(
-    train_embeddings_path: Path,
-    dev_embeddings_path: Path,
-    dataset_type: DatasetEnum,
-    train_positive_file_path: Path,
-    train_negative_file_path: Path,
-    dev_positive_file_path: Path,
-    dev_negative_file_path: Path,
-    ratio: int,
+    embeddings_path: Path,
+    dataset_config_file: Path,
     hidden_size: int,
-    use_cuda: bool,
+    use_cuda: bool = USE_CUDA,
 ) -> tuple[
     ...,  # TODO
     ...,  # TODO
     PairwiseModelKenton,
+    str,
+    str
 ]:
-    torch.manual_seed(1234)
-    random.seed(1234)
-    np.random.seed(1234)
-
-    embed_utils = EmbedFromFile([train_embeddings_path, dev_embeddings_path])
+    # load encoded mentions
+    embed_utils = EmbedFromFile(embeddings_path)
+    # init a model
     pairwise_model = PairwiseModelKenton(embed_utils.embed_size, hidden_size, 1, embed_utils, use_cuda)
 
-    train_dataset = DataSet.get_dataset(dataset_type, ratio=ratio, split=Split.train)
-    dev_dataset = DataSet.get_dataset(dataset_type, split=Split.dev)
-    train_feat = train_dataset.load_pos_neg_pickle(train_positive_file_path, train_negative_file_path)
-    validation_feat = dev_dataset.load_pos_neg_pickle(dev_positive_file_path, dev_negative_file_path)
+    # load datasets
+    with open(dataset_config_file, "r") as file:
+        dataset_config = json.load(file)
+
+    with open(dataset_config[Split.train.value], "rb") as file:
+        train_dataset = pickle.load(file)
+
+    with open(dataset_config[Split.dev.value], "rb") as file:
+        dev_dataset = pickle.load(file)
+
+    train_feat = train_dataset.get_mix_pairs()
+    validation_feat = dev_dataset.get_mix_pairs()
 
     if use_cuda:
         torch.cuda.manual_seed(1234)
         pairwise_model.cuda()
 
-    return train_feat, validation_feat, pairwise_model
+    return train_feat, validation_feat, pairwise_model, "_".join(train_dataset.dataset_components), "_".join(dev_dataset.dataset_components)
 
 
-def main(arguments):
+def main(arguments, config_name: str):
     start_time = datetime.now()
     dt_string = start_time.strftime("%d%m%Y_%H%M%S")
     _output_folder = create_and_get_path("checkpoints/" + dt_string)
-    _batch_size = int(arguments.get("--bs"))
-    _learning_rate = float(arguments.get("--lr"))
-    _ratio = int(arguments.get("--ratio"))
-    _iterations = int(arguments.get("--itr"))
+    _batch_size = int(arguments.get("--bs", 16))
+    _learning_rate = float(arguments.get("--lr", 5e-4))
+    _iterations = int(arguments.get("--itr", 10))
     _use_cuda = True if arguments.get("--cuda").lower() == "true" else False
     _fine_tune = True if arguments.get("--ft").lower() == "true" else False
-    _weight_decay = float(arguments.get("--wd"))
-    _hidden_size = int(arguments.get("--hidden"))
-    _dataset_arg = arguments.get("--dataset")
+    _weight_decay = float(arguments.get("--wd", 0.01))
+    _hidden_size = int(arguments.get("--hidden", 150))
 
-    _train_pos_file = arguments.get("--tpf")
-    _train_neg_file = arguments.get("--tnf")
-    _dev_pos_file = arguments.get("--dpf")
-    _dev_neg_file = arguments.get("--dnf")
-    _train_embed = arguments.get("--te")
-    _dev_embed = arguments.get("--de")
-    _model_file = _output_folder + "/" + arguments.get("--mf")
+    model_name = get_model_name(config_name)
+    _model_file = _output_folder / model_name
+
+    file_name = get_dataset_name(config_name)
+    dataset_file_path = PROJECT_ROOT / "config" / file_name
+
+    _event_train_feat, _event_validation_feat, _pairwise_model, _train_names, _dev_names = init_basic_training_resources(
+        embeddings_path=CACHED_VECTOR_PATH,
+        dataset_config_file=dataset_file_path,
+        hidden_size=_hidden_size,
+    )
 
     log_params_str = (
         "ds_"
-        + _dataset_arg
+        + _train_names
         + "_lr_"
         + str(_learning_rate)
         + "_bs_"
         + str(_batch_size)
-        + "_r"
-        + str(_ratio)
         + "_itr"
         + str(_iterations)
     )
     # TODO: replace with simple logger.
-    create_logger_with_fh(_output_folder + "/train_" + log_params_str)
+    create_logger_with_fh(str(_output_folder) + "/"  f"train_{log_params_str}")
 
     # TODO: prettify
     logger.info(
         "train_set="
-        + _dataset_arg
+        + _train_names
         + ", lr="
         + str(_learning_rate)
         + ", bs="
         + str(_batch_size)
-        + ", ratio=1:"
-        + str(_ratio)
         + ", itr="
         + str(_iterations)
         + ", hidden_s="
         + str(_hidden_size)
         + ", weight_decay="
         + str(_weight_decay),
-    )
-
-    _event_train_feat, _event_validation_feat, _pairwise_model = init_basic_training_resources(
-        train_embeddings_path=_train_embed,
-        dev_embeddings_path=_dev_embed,
-        dataset_type=_dataset_arg,
-        train_positive_file_path=_train_pos_file,
-        train_negative_file_path=_train_neg_file,
-        dev_positive_file_path=_dev_pos_file,
-        dev_negative_file_path=_dev_neg_file,
-        ratio=_ratio,
-        hidden_size=_hidden_size,
-        use_cuda=_use_cuda,
     )
 
     train_pairwise(
@@ -260,4 +257,6 @@ def main(arguments):
 
 if __name__ == "__main__":
     arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
-    main(arguments)
+    # TODO Sergei: proper reading as arg the config file for the experiment + the config for the training parameters
+    config_name = CONFIG_NAME
+    main(arguments, config_name)

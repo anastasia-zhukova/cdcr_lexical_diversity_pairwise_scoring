@@ -8,9 +8,15 @@ from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import Mentio
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, MentionPairStrategy, ScopeConfig
 
 
-def create_dataset_name(split: Split, type_of_pairs: MentionPairStrategy, scope: ScopeConfig, max_pairs: Union[int, None], dataset_components: List[str]):
-    return PROJECT_ROOT / "resources" / f"{split.value}_{type_of_pairs.value}_{scope.value}_{max_pairs}_{'-'.join(dataset_components)}.pickle"
+def create_dataset_name(split: Split, type_of_pairs: MentionPairStrategy, scope: ScopeConfig, max_pairs: Union[int, None], ratio: int, dataset_components: List[str]):
+    return PROJECT_ROOT / "resources" / f"{split.value}_{type_of_pairs.value}_{scope.value}_{max_pairs}_{ratio}_{'-'.join(dataset_components)}.pickle"
 
+
+def get_dataset_name(config_name: str):
+    return config_name.split(".")[0].replace("preprocess", "datasets") + ".json"
+
+def get_model_name(config_name: str):
+    return config_name.split(".")[0].replace("preprocess", "model") + ".json"
 
 
 def write_coref_scorer_results(
