@@ -32,7 +32,7 @@ from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, precision_recall_f1
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path, get_dataset_name, get_model_name
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path, get_dataset_config_name, get_model_name, get_model_config_name
 from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CACHED_VECTOR_PATH, USE_CUDA
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
@@ -60,6 +60,7 @@ def train_pairwise(
     loss_func = torch.nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(pairwise_model.parameters(), lr, weight_decay=weight_decay)
     dataset_size = len(train)
+    model_save_path = ""
 
     best_result_so_far = -1
 
@@ -97,10 +98,12 @@ def train_pairwise(
 
         if best_result_so_far < dev_f1:
             logger.info("Found better model saving")
-            torch.save(pairwise_model, model_out + "iter_" + str(epoch + 1))
+            model_name = model_out.stem + "_iter_" + str(epoch + 1)
+            model_save_path = model_out.parent / model_name
+            torch.save(pairwise_model, model_save_path)
             best_result_so_far = dev_f1
 
-    return best_result_so_far
+    return best_result_so_far, model_save_path
 
 
 def accuracy_on_dataset(
@@ -205,7 +208,7 @@ def main(arguments, config_name: str):
     model_name = get_model_name(config_name)
     _model_file = _output_folder / model_name
 
-    file_name = get_dataset_name(config_name)
+    file_name = get_dataset_config_name(config_name)
     dataset_file_path = PROJECT_ROOT / "config" / file_name
 
     _event_train_feat, _event_validation_feat, _pairwise_model, _train_names, _dev_names = init_basic_training_resources(
@@ -243,7 +246,7 @@ def main(arguments, config_name: str):
         + str(_weight_decay),
     )
 
-    train_pairwise(
+    eval_res, best_model_path = train_pairwise(
         _pairwise_model,
         _event_train_feat,
         _event_validation_feat,
@@ -253,6 +256,13 @@ def main(arguments, config_name: str):
         model_out=_model_file,
         weight_decay=_weight_decay,
     )
+    run_results = {"eval_dev": eval_res, "model": best_model_path}
+
+    # TODO Sergei proper saving to config with the best model
+    model_config_name = get_model_config_name(config_name)
+    model_config_path = PROJECT_ROOT / "config" / model_config_name
+    with open(model_config_name, "w") as file:
+        json.dump(run_results, model_config_path)
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ import torch
 from docopt import docopt
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_name
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_config_name
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedTransformersGenerics
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, USE_CUDA, CACHED_VECTOR_PATH
@@ -92,7 +92,7 @@ def main(config_name) -> None:
     if USE_CUDA:
         torch.cuda.manual_seed(0)
 
-    file_name = get_dataset_name(config_name)
+    file_name = get_dataset_config_name(config_name)
     dataset_file_path = PROJECT_ROOT / "config" / file_name
     with open(dataset_file_path, "r", encoding="utf-8") as file:
         dataset_dict = json.load(file)
