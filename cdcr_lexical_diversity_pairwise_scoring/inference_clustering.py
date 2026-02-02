@@ -63,8 +63,16 @@ def get_pairwise_model(
 def predict_and_cluster(
     test_dataset: uCDCRDataSet,
     model: PairwiseModelKenton,
-    experiment_name: str
+    experiment_name: str,
 ):
+    cached_file = f"predictions_{experiment_name}.pickle"
+    cached_path = PROJECT_ROOT / "resources" / cached_file
+    if cached_path.exists():
+        with open(cached_path, "rb") as file:
+            predictions = pickle.load(file)
+    else:
+        predictions = {}
+
     # self.positive_pairs_eval_format[dataset][topic_id][pairs_type.value]
     experiment_results_dict = {}
 
@@ -80,7 +88,12 @@ def predict_and_cluster(
                 experiment_results_dict[dataset][topic_id][pairs_type] = []
 
                 all_pairs = test_dataset.positive_pairs_eval_format[pairs_type] + test_dataset.negative_pairs_eval_format[pairs_type]
-                all_scores = score_mention_pairs(model, all_pairs)
+                key = f"{dataset}_{topic_id}_{pairs_type}"
+                if key in predictions:
+                    all_scores = predictions[key]
+                else:
+                    all_scores = score_mention_pairs(model, all_pairs)
+                    predictions[key] = all_scores
 
                 # correctly reshape mentions now
                 used_mention_ids = list(set(chain.from_iterable([[pair[0].mention_id, pair[0].mention_id] for pair in all_pairs])))
@@ -103,6 +116,10 @@ def predict_and_cluster(
                     m_save = {k: v for k, v in dict(m.__dict__) if k in ["mention_id", "tokens_str", "coref_chain", "topic", "subtopic", "doc", "topic_id",  "subtopic_id", "doc_id", "dataset", "mention_context", "tokens_number_context"]}
                     m_save["predicted_coref_chain"] = f"{dataset}_{topic_id}_{predicted_clusters[i]}"
                     experiment_results_dict[dataset][topic_id][pairs_type].append(m_save)
+
+            with open(cached_file, "wb") as file:
+                pickle.dump(predictions, file)
+            logger.info(f"Cached predictions of topic {topic_id}")
 
     file_name = f"results_{experiment_name}.json"
     exp_dict_path = PROJECT_ROOT / "evaluation_results" / "clusters" / file_name

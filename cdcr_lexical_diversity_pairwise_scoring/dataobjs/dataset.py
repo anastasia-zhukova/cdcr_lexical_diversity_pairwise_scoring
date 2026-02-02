@@ -796,7 +796,12 @@ class uCDCRDataSet(DataSet):
                     else:
                         mentions = self.topics.topics_dict[topic_id].mentions
 
-                    triangle_pairs = list(combinations(mentions, 2))
+                    if EXCLUDE_SINGLETONS:
+                        mentions_eval = [m for m in mentions if not m.is_singleton]
+                    else:
+                        mentions_eval = mentions
+
+                    triangle_pairs = list(combinations(mentions_eval, 2))
 
                     for mention1, mention2 in triangle_pairs:
                         if mention1.coref_chain == mention2.coref_chain:

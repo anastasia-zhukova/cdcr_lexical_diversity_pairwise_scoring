@@ -1,5 +1,5 @@
 """Usage:
-    generate_pairs_predictions.py --tmf=<TestMentionsFile> --tef=<TestEmbedFile> --mf=<ModelFile> --out=<OurPredFile>
+    _old_generate_pairs_predictions.py --tmf=<TestMentionsFile> --tef=<TestEmbedFile> --mf=<ModelFile> --out=<OurPredFile>
             [--cuda=<y>] [--topic=<type>] [--em=<ExtractMethod>]
 
 Options:
