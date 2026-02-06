@@ -25,11 +25,21 @@ python setup.py
 ## Folder with experiment configs 
 The folder with all experiment configs for reproduction: 
 ```
-config/experiments
+config
 ```
 TODO AZ: description of the experiments
 TODO AZ desciption of the config fields
 TODO AZ: a code for the lemma baseline is in the uCDCR project, give a link
+
+| file name | experiment code | group of experiment | description |
+|-----------|-----------------|---------------------|-------------|
+|           |                 |                     |             |
+|           |                 |                     |             |
+|           |                 |                     |             |
+|           |                 |                     |             |
+|           |                 |                     |             |
+|           |                 |                     |             |
+
 
 ## 1. Preprocessing
 ### 1.1 Generate mentions pairs

@@ -87,6 +87,8 @@ def main(config_name: str = None):
     Computes CoNLL scores for the experiment that we want or for everything
     """
     now_ = datetime.now()
+    save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation.csv'
+    save_filename_topics = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation_topics.csv'
     summary_folder = PROJECT_ROOT / "evaluation_results" / "output_files"
     result_path = PROJECT_ROOT / "evaluation_results" / "input_files"
 
@@ -131,8 +133,9 @@ def main(config_name: str = None):
 
                 summary_df_subtopic = pd.concat([summary_df_subtopic, pair_topic_df])
                 summary_df = pd.concat([summary_df, pd.DataFrame(pair_topic_df.mean(), columns=[f'{experiment}\\{dataset}\\{pair_type}\\all']).T], axis=0)
+                summary_df.to_csv(summary_folder / save_filename)
+                summary_df_subtopic.to_csv(summary_folder / save_filename_topics)
 
-    save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation.csv'
     summary_df.to_csv(summary_folder / save_filename)
     save_filename_topics = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation_topics.csv'
     summary_df_subtopic.to_csv(summary_folder / save_filename_topics)

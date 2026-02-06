@@ -1,0 +1,21 @@
+dataset_folder: datasets/uCDCR
+setting: excluding_target
+type_of_pairs: encoder
+ratio: 1
+max_pairs_train: 50000
+train_scope: subtopic
+train_dataset_names:
+  - ECBplus
+  - ECBplusMETAm
+  - GVC
+  - HyperCoref
+  - NewsWCL50
+  - NiDENT
+  - NP4E
+  - WECEng
+dev_scope: subtopic
+dev_type_of_pairs: all
+max_pairs_dev: 8000
+test_scope: subtopic
+test_dataset_names:
+  - GVC
