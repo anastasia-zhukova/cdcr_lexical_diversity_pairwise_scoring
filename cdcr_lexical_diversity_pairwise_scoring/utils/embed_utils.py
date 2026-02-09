@@ -85,7 +85,11 @@ class EmbedTransformersGenerics:
         mention_span = self.tokenizer.encode(" ".join(mention_span_str), add_special_tokens=False)
 
         all_sentence_tokens = [
-            self.tokenizer.cls_token_id + context_before + mention_span + context_after + self.tokenizer.sep_token_id,
+            [self.tokenizer.cls_token_id]
+            + context_before
+            + mention_span
+            + context_after
+            + [self.tokenizer.sep_token_id],
         ]
         all_sentence_tokens = torch.tensor(all_sentence_tokens)
         mention_start_index = len(context_before) + 1

@@ -1,5 +1,4 @@
-"""
-Usage:
+"""Usage:
     preprocess_embed.py <File> [<File2>] [<File3>]
     preprocess_embed.py <File> [<File2>] [<File3>] [--max=<x>]
     preprocess_embed.py <File> [<File2>] [<File3>] [--cuda=<y>]
@@ -16,14 +15,26 @@ import multiprocessing
 import pickle
 import random
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
+import hydra
 import torch
-from docopt import docopt
+from hydra.core.config_store import ConfigStore
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedTransformersGenerics
+
+
+@dataclass
+class Config:
+    file_1: Path | None
+    file_2: Path | None
+    file_3: Path | None
+    use_cuda: bool
+    max_context: int
 
 
 def extract_feature_dict(
@@ -42,9 +53,10 @@ def extract_feature_dict(
             result_train[mention.mention_id] = (hidden.cpu(), first_token.cpu(), last_token.cpu(), mention_size)
             mention_count -= 1
             if mention_count > 0:
+                # TODO: refactor to not overflood.
                 logger.info(
                     f"Remaining {mention_count} Mentions in Topic {i+1}/{topic_count}."
-                    f" Last Mention took {time_took} seconds"
+                    f" Last Mention took {time_took} seconds",
                 )
             else:
                 logger.info(f"Finished Topic {i+1}/{topic_count}. Last Mention took {time_took} seconds")
@@ -77,31 +89,31 @@ def worker(
     logger.info(f"Finished {basename}")
 
 
-def main(arguments):
+cs = ConfigStore.instance()
+cs.store(name="preprocess_embed_config", node=Config)
+
+
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name="preprocess_embed_config")
+def main(config: Config) -> None:
     multiprocessing.set_start_method("spawn")
-    _file1 = arguments.get("<File>")
-    _file2 = arguments.get("<File2>")
-    _file3 = arguments.get("<File3>")
-    max_surrounding_context = int(arguments.get("--max"))
-    use_cuda = True if arguments.get("--cuda").lower() == "true" else False
 
     all_files = list()
-    if _file1:
-        all_files.append(_file1)
-    if _file2:
-        all_files.append(_file2)
-    if _file3:
-        all_files.append(_file3)
+    if config.file_1:
+        all_files.append(PROJECT_ROOT / config.file_1)
+    if config.file_2:
+        all_files.append(PROJECT_ROOT / config.file_2)
+    if config.file_3:
+        all_files.append(PROJECT_ROOT / config.file_3)
 
     torch.manual_seed(0)
     random.seed(0)
-    if use_cuda:
+    if config.use_cuda:
         torch.cuda.manual_seed(0)
 
     logger.info(f"Processing files {all_files}")
     jobs = []
     for resource_file in all_files:
-        job = multiprocessing.Process(target=worker, args=(resource_file, max_surrounding_context, use_cuda))
+        job = multiprocessing.Process(target=worker, args=(resource_file, config.max_context, config.use_cuda))
         jobs.append(job)
         job.start()
 
@@ -110,5 +122,4 @@ def main(arguments):
 
 
 if __name__ == "__main__":
-    arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
-    main(arguments)
+    main()
