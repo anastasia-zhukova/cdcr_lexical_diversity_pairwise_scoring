@@ -1,5 +1,8 @@
+import logging
+import pickle
 import random
 from dataclasses import dataclass
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -13,12 +16,18 @@ from tqdm import tqdm
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
 from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, precision_recall_f1
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path, get_dataset_config_name, get_model_name, get_model_config_name
 from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CACHED_VECTOR_PATH, USE_CUDA
+from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 
+torch.manual_seed(1234)
+random.seed(1234)
+np.random.seed(1234)
+logger = logging.getLogger(__name__)
 
 @dataclass
 class Config:
@@ -44,6 +53,10 @@ class Config:
     weight_decay: float = MISSING
     hidden_size: int = MISSING
 
+CONFIG_NAME = "preprocess_test"
+cs = ConfigStore.instance()
+cs.store(name=CONFIG_NAME, node=Config)
+
 
 def train_pairwise(
     pairwise_model: PairwiseModelKenton,
@@ -58,6 +71,7 @@ def train_pairwise(
     loss_func = torch.nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(pairwise_model.parameters(), lr, weight_decay=weight_decay)
     dataset_size = len(train)
+    model_save_path = ""
 
     best_result_so_far = -1
 
@@ -100,10 +114,12 @@ def train_pairwise(
 
         if best_result_so_far < dev_f1:
             logger.info("Found better model saving")
-            torch.save(pairwise_model, model_out + "iter_" + str(epoch + 1))
+            model_name = model_out.stem + "_iter_" + str(epoch + 1)
+            model_save_path = model_out.parent / model_name
+            torch.save(pairwise_model, model_save_path)
             best_result_so_far = dev_f1
 
-    return best_result_so_far
+    return best_result_so_far, model_save_path
 
 
 def accuracy_on_dataset(
@@ -157,39 +173,41 @@ def run_inference(
 
 
 def init_basic_training_resources(
-    train_embeddings_path: Path,
-    dev_embeddings_path: Path,
-    dataset_type: DatasetEnum,
-    train_positive_file_path: Path,
-    train_negative_file_path: Path,
-    dev_positive_file_path: Path,
-    dev_negative_file_path: Path,
-    ratio: int,
+    embeddings_path: Path,
+    dataset_config_file: Path,
     hidden_size: int,
-    use_cuda: bool,
+    use_cuda: bool = USE_CUDA,
 ) -> tuple[
     ...,  # TODO
     ...,  # TODO
     PairwiseModelKenton,
+    str,
+    str
 ]:
-    torch.manual_seed(1234)
-    random.seed(1234)
-    np.random.seed(1234)
-
-    embed_utils = EmbedFromFile([train_embeddings_path, dev_embeddings_path], use_cuda)
+    # load encoded mentions
+    embed_utils = EmbedFromFile(embeddings_path, use_cuda)
+    # init a model
     pairwise_model = PairwiseModelKenton(embed_utils.embed_size, hidden_size, 1, embed_utils, use_cuda)
 
-    train_dataset = DataSet.get_dataset(dataset_type, ratio=ratio, split=Split.train)
-    dev_dataset = DataSet.get_dataset(dataset_type, split=Split.dev)
-    train_feat = train_dataset.load_pos_neg_pickle(train_positive_file_path, train_negative_file_path)
-    validation_feat = dev_dataset.load_pos_neg_pickle(dev_positive_file_path, dev_negative_file_path)
+    # load datasets
+    with open(dataset_config_file, "r") as file:
+        dataset_config = json.load(file)
+
+    with open(dataset_config[Split.train.value], "rb") as file:
+        train_dataset = pickle.load(file)
+
+    with open(dataset_config[Split.dev.value], "rb") as file:
+        dev_dataset = pickle.load(file)
+
+    train_feat = train_dataset.get_mix_pairs()
+    validation_feat = dev_dataset.get_mix_pairs()
 
     if use_cuda:
         logger.info("Using cuda.")
         torch.cuda.manual_seed(1234)
         pairwise_model.cuda()
 
-    return train_feat, validation_feat, pairwise_model
+    return train_feat, validation_feat, pairwise_model, "_".join(train_dataset.dataset_components), "_".join(dev_dataset.dataset_components)
 
 
 cs = ConfigStore.instance()
@@ -201,6 +219,12 @@ def main(config: Config):
     start_time = datetime.now()
     dt_string = start_time.strftime("%d%m%Y_%H%M%S")
     output_folder = create_and_get_path("checkpoints/" + dt_string)
+    
+    model_name = get_model_name(config_name)
+    _model_file = output_folder / model_name
+
+    file_name = get_dataset_config_name(config_name)
+    dataset_file_path = PROJECT_ROOT / "config" / file_name # todo: ??
 
     log_params_str = (
         "ds_"
@@ -234,21 +258,14 @@ def main(config: Config):
         + ", weight_decay="
         + str(config.weight_decay),
     )
-
-    _event_train_feat, _event_validation_feat, _pairwise_model = init_basic_training_resources(
-        train_embeddings_path=PROJECT_ROOT / config.train_embeddings_file,
-        dev_embeddings_path=PROJECT_ROOT / config.dev_embeddings_file,
-        dataset_type=DatasetEnum(config.dataset_name),
-        train_positive_file_path=PROJECT_ROOT / config.train_positive_file,
-        train_negative_file_path=PROJECT_ROOT / config.train_negative_file,
-        dev_positive_file_path=PROJECT_ROOT / config.dev_positive_file,
-        dev_negative_file_path=PROJECT_ROOT / config.dev_negative_file,
-        ratio=config.negative_positive_ratio,
+    
+    _event_train_feat, _event_validation_feat, _pairwise_model, _train_names, _dev_names = init_basic_training_resources(
+        embeddings_path=CACHED_VECTOR_PATH,
+        dataset_config_file=dataset_file_path,
         hidden_size=config.hidden_size,
-        use_cuda=config.use_cuda,
     )
 
-    train_pairwise(
+    eval_res, best_model_path = train_pairwise(
         _pairwise_model,
         _event_train_feat,
         _event_validation_feat,
@@ -258,7 +275,16 @@ def main(config: Config):
         model_out=config.model_name,
         weight_decay=config.weight_decay,
     )
+    run_results = {"eval_dev": eval_res, "model": best_model_path}
+
+    # TODO Sergei proper saving to config with the best model
+    model_config_name = get_model_config_name(config_name)
+    model_config_path = PROJECT_ROOT / "config" / model_config_name
+    with open(model_config_name, "w") as file:
+        json.dump(run_results, model_config_path)
 
 
 if __name__ == "__main__":
+    # TODO Sergei: proper reading as arg the config file for the experiment + the config for the training parameters
+    config_name = CONFIG_NAME
     main()

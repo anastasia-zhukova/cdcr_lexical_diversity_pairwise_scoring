@@ -1,9 +1,19 @@
 import spacy
 from spacy.symbols import VERB
+from spacy.util import is_package
+from spacy.cli import download
+
+SPACY_MODEL = "en_core_web_sm"
+
+if not is_package(SPACY_MODEL):
+    print(f"spaCy model '{SPACY_MODEL}' not found. Downloading...")
+    download(SPACY_MODEL)
+
+
 
 
 class SpacySyntaxAnalyzer:
-    spacy_parser = spacy.load("en_core_web_sm")
+    spacy_parser = spacy.load(SPACY_MODEL)
 
     @classmethod
     def find_head_lemma_pos_ner(
@@ -41,7 +51,7 @@ class SpacySyntaxAnalyzer:
 
 
 class SpacyTokenizer:
-    spacy_parser = spacy.load("en_core_web_sm")
+    spacy_parser = spacy.load(SPACY_MODEL)
 
     @classmethod
     def get_tokenized_string(

@@ -7,7 +7,8 @@ from torchtyping import TensorType
 from transformers import RobertaModel, RobertaTokenizer
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionuCDCR
+from cdcr_lexical_diversity_pairwise_scoring.constants import LANGUAGE_MODEL
 
 
 @dataclass
@@ -23,10 +24,10 @@ class TensorBuildOutput:
 class EmbedTransformersGenerics:
     def __init__(
         self,
-        max_surrounding_context: int,
+        max_surrounding_context: int = -1,
         finetune: bool = False,
         use_cuda: bool = True,
-        bert_model_name: str = "roberta-large",
+        bert_model_name: str = LANGUAGE_MODEL,
     ):
 
         self.max_surrounding_context = max_surrounding_context
@@ -40,39 +41,39 @@ class EmbedTransformersGenerics:
         if self.use_cuda:
             self.model.cuda()
 
-    def get_mention_full_rep(self, mention: MentionData):
-        sent_ids, ment1_inx_start, ment1_inx_end = self.mention_feat_to_vec(mention)
+    def get_mention_full_rep(self, mention: MentionuCDCR):
+        context_ids, m_start_id, m_end_id = self.encode_mention(mention)
 
         if self.use_cuda:
-            sent_ids = sent_ids.cuda()
+            context_ids = context_ids.cuda()
 
         if not self.finetune:
             with torch.no_grad():  # TODO: this should be handled outside
-                last_hidden_span = self.model(sent_ids).last_hidden_state
+                last_hidden_span = self.model(context_ids).last_hidden_state
         else:
-            last_hidden_span = self.model(sent_ids).last_hidden_state
+            last_hidden_span = self.model(context_ids).last_hidden_state
 
-        mention_hidden_span = last_hidden_span.view(last_hidden_span.shape[1], -1)[ment1_inx_start:ment1_inx_end]
+        mention_hidden_span = last_hidden_span.view(last_hidden_span.shape[1], -1)[m_start_id:m_end_id]
         return mention_hidden_span, mention_hidden_span[0], mention_hidden_span[-1], mention_hidden_span.shape[0]
 
     @staticmethod
-    def extract_mention_surrounding_context(mention: MentionData):
-        tokens_indexes = mention.tokens_number
+    def extract_mention_surrounding_context(mention: MentionuCDCR):
+        tokens_indexes = mention.tokens_number_context
         context = mention.mention_context
         start_mention_index = tokens_indexes[0]
         end_mention_index = tokens_indexes[-1] + 1
-        assert len(tokens_indexes) == len(mention.tokens_str.split(" "))
+        assert len(tokens_indexes) == len(mention.tokens_number)
 
-        ret_context_before = context[0:start_mention_index]
+        ret_context_before = context[:start_mention_index]
         ret_mention = context[start_mention_index:end_mention_index]
         ret_context_after = context[end_mention_index:]
 
-        assert ret_mention == mention.tokens_str.split(" ")
+        assert ret_mention == mention.tokens_text
         assert ret_context_before + ret_mention + ret_context_after == mention.mention_context
 
         return ret_context_before, ret_mention, ret_context_after
 
-    def mention_feat_to_vec(self, mention: MentionData):
+    def encode_mention(self, mention: MentionuCDCR):
         context_before_str, mention_span_str, context_after_str = (
             EmbedTransformersGenerics.extract_mention_surrounding_context(mention)
         )
@@ -106,7 +107,7 @@ class EmbedTransformersGenerics:
         all_sentence_tokens = torch.tensor(all_sentence_tokens)
         mention_start_index = len(context_before) + 1
         mention_end_index = len(context_before) + len(mention_span) + 1
-        return all_sentence_tokens, mention_start_index, mention_end_index
+        return all_context_tokens, mention_start_index, mention_end_index
 
     @property
     def get_embed_size(self):

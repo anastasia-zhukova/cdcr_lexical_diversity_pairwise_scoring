@@ -1,7 +1,7 @@
 import unittest
 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import TopicConfig
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import ScopeConfig
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import validate_pairs
 
 
@@ -10,7 +10,7 @@ class TestDataUtils(unittest.TestCase):
         dataset = DataSet.get_dataset(DatasetEnum.wec)
         positive_, negative_ = dataset.get_pairwise_feat(
             "tests/test_res/Event_gold_mentions.json",
-            to_topics=TopicConfig.subtopic,
+            to_topics=ScopeConfig.subtopic,
         )
         self.validate(dataset, negative_, positive_)
 

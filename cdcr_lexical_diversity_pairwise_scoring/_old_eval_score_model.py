@@ -1,5 +1,5 @@
 """Usage:
-    inference.py --tpf=<TestPosFile> --tnf=<testNegFile> --te=<TestEmbed> --mf=<ModelFile> [--cuda=<b>]
+    _old_eval_score_model.py --tpf=<TestPosFile> --tnf=<testNegFile> --te=<TestEmbed> --mf=<ModelFile> [--cuda=<b>]
 
 Options:
     -h --help       Show this screen.

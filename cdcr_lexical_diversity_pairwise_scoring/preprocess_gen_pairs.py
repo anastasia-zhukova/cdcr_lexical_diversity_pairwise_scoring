@@ -11,88 +11,98 @@ Options:
     --topic=<type>  subtopic/topic/corpus - relevant only to ECB+, take pairs only from the same sub-topic, topic or corpus wide [default: corpus]
 
 """
-
+import json
 import pickle
 import random
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List
 
 import hydra
 from hydra.core.config_store import ConfigStore
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import TopicConfig
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, DEFAULT_RATIO
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, uCDCRDataSet, MentionPairStrategy, DatasetSetting
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import ScopeConfig
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_dataset_name
 
+# TODO Sergei: fix the configs to be pluggable for each experiment
+CONFIG_NAME = "preprocess_test"
 
 @dataclass
 class Config:
-    event_validation_file: Path
+    dataset_folder: Path
+    setting: DatasetSetting
+    type_of_pairs: MentionPairStrategy
     ratio: int
-    split: Split
-    topic: TopicConfig
-    dataset_name: DatasetEnum
-
-
-def generate_pairs(
-    event_validation_file: Path,
-    dataset: DataSet,
-    topic_config: int,  # TODO: config should not be presented as int.
-):
-    positive, negative = dataset.get_pairwise_feat(
-        data_file=event_validation_file,
-        to_topics=topic_config,
-    )
-    logger.debug(f"Created {len(positive)} positive pairs and {len(negative)} negative pairs.")
-    validate_pairs(positive, negative)
-
-    dirname = Path(event_validation_file).parent
-    basename = Path(event_validation_file).stem
-
-    positive_file_path = dirname / f"{basename}_PosPairs.pickle"
-    with positive_file_path.open("wb") as file:
-        pickle.dump(positive, file)
-    logger.info(f"Saved positive pairs in {positive_file_path}.")
-
-    negative_file_path = dirname / f"{basename}_NegPairs.pickle"
-    with negative_file_path.open("wb") as file:
-        pickle.dump(negative, file)
-    logger.info(f"Saved negative pairs in {negative_file_path}.")
-
-
-def validate_pairs(pos_pairs, neg_pairs):
-    for men1, men2 in pos_pairs:
-        if men1.coref_chain != men2.coref_chain:
-            raise ValueError("Error when validating positive pairs!")
-
-    for men1, men2 in neg_pairs:
-        if men1.coref_chain == men2.coref_chain:
-            raise ValueError("Error when validating negative pairs!")
-
-    logger.info("Validation Passed!")
+    max_pairs_train: int
+    train_scope: ScopeConfig
+    train_dataset_names: List[str]
+    dev_scope: ScopeConfig
+    dev_type_of_pairs: MentionPairStrategy
+    max_pairs_dev: int
+    test_scope: ScopeConfig
+    test_dataset_names: List[str]
 
 
 cs = ConfigStore.instance()
-cs.store(name="preprocess_gen_pairs_config", node=Config)
+cs.store(name=CONFIG_NAME, node=Config)
 
 
-@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name="preprocess_gen_pairs_config")
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
 def main(config: Config) -> None:
     logger.debug(config)
     random.seed(0)
-    dataset = DataSet.get_dataset(config.dataset_name, ratio=config.ratio, split=config.split)
+    dataset_dict = {}
 
-    if config.dataset_name == DatasetEnum.wec and config.split == Split.train and config.ratio == -1:
-        logger.warning("Selected WEC dataset for train with a -1 ratio will generate all possible negative pairs!!")
+    for split in [Split.train, Split.dev, Split.test]:
+        logger.info(f"Generating pairs for {split.value} split")
+        config.dataset_folder = PROJECT_ROOT / config.dataset_folder
+        dataset = uCDCRDataSet(config, split)
 
-    logger.info(f"Generating pairs for file: {config.event_validation_file}")
-    generate_pairs(
-        event_validation_file=PROJECT_ROOT / config.event_validation_file,
-        dataset=dataset,
-        topic_config=config.topic,
-    )
+        if split == Split.train:
+            scope = config.train_scope
+            max_pairs = config.max_pairs_train
+            type_of_pairs = config.type_of_pairs
+            ratio = config.ratio
+
+        elif split == Split.dev:
+            scope = config.dev_scope
+            max_pairs = config.max_pairs_dev
+            type_of_pairs = config.dev_type_of_pairs
+            if type_of_pairs == MentionPairStrategy.all:
+                ratio = -1
+            else:
+                ratio = config.ratio
+            # type_of_pairs = MentionPairStrategy.all
+
+        else:
+            scope = config.test_scope
+            max_pairs = None
+            ratio = -1
+            type_of_pairs = MentionPairStrategy.all
+
+        save_path = create_dataset_name(split, type_of_pairs, scope, max_pairs, ratio, dataset.dataset_components)
+        if save_path.exists():
+            logger.info(f"A dataset for {split.value} with the same config (path {str(save_path)}) already exists. Skipped.")
+            continue
+
+        dataset.generate_pairs()
+        dataset.save_dataset(save_path)
+        dataset_dict[split.value] = str(save_path)
+
+    # save all paths to the created datasets for this experiment
+    # TODO Sergei: save the config into a yaml file
+    file_name = f'datasets_{"_".join(CONFIG_NAME.split("_")[1:])}.json'
+    with open(PROJECT_ROOT / "config" / file_name, "w", encoding="utf-8") as file:
+        json.dump(dataset_dict, file)
+
+    logger.info(f"The paths to the created datasets for the current experiment config is saved in: {file_name}")
 
 
 if __name__ == "__main__":
+    # TODO Sergei: proper reading specific config to each experiment
+    # CONFIG_NAME = "preprocess_test"
+    # cs.store(name=CONFIG_NAME, node=Config)
     main()
