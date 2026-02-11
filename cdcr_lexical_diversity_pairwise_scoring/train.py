@@ -1,40 +1,48 @@
-"""Usage:
-    train.py --tpf=<TrainPosFile> --tnf=<TrainNegFile> --dpf=<DevPosFile> --dnf=<DevNegFile>
-                    --te=<TrainEmbed> --de=<DevEmbed> --mf=<ModelFile> [--bs=<x>] [--lr=<y>] [--ratio=<z>] [--itr=<k>]
-                    [--cuda=<b>] [--ft=<b1>] [--wd=<t>] [--hidden=<w>] [--dataset=<d>]
-
-Options:
-    -h --help       Show this screen.
-    --bs=<x>        Batch size [default: 32]
-    --lr=<y>        Learning rate [default: 5e-4]
-    --ratio=<z>     Ratio of positive:negative, were negative is the controlled list (ratio=-1 => no ratio) [default: -1]
-    --itr=<k>       Number of iterations [default: 10]
-    --cuda=<y>      True/False - Whether to use cuda device or not [default: True]
-    --ft=<b1>       Fine-tune the LM or not [default: False]
-    --wd=<t>        Adam optimizer Weight-decay [default: 0.01]
-    --hidden=<w>    hidden layers size [default: 150]
-    --dataset=<d>   wec/ecb - which dataset to generate for [default: wec]
-
-"""
-
-import logging
 import random
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import hydra
 import numpy as np
 import torch
-from docopt import docopt
+from hydra.core.config_store import ConfigStore
+from omegaconf import MISSING
+from tqdm import tqdm
 
+from cdcr_lexical_diversity_pairwise_scoring import logger
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
 from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
-from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, get_prec_rec_f1
+from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, precision_recall_f1
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path
 from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
 
 
-logger = logging.getLogger(__name__)
+@dataclass
+class Config:
+    # required files
+    train_positive_file: Path = MISSING
+    train_negative_file: Path = MISSING
+    dev_positive_file: Path = MISSING
+    dev_negative_file: Path = MISSING
+    train_embeddings_file: Path = MISSING
+    dev_embeddings_file: Path = MISSING
+
+    # outputs / identity
+    model_name: str = MISSING
+    dataset_name: DatasetEnum = MISSING
+
+    # training params
+    batch_size: int = MISSING
+    learning_rate: float = MISSING
+    negative_positive_ratio: int = MISSING
+    training_iterations: int = MISSING
+    use_cuda: bool = MISSING
+    fine_tune: bool = MISSING
+    weight_decay: float = MISSING
+    hidden_size: int = MISSING
 
 
 def train_pairwise(
@@ -60,7 +68,9 @@ def train_pairwise(
 
         cumulative_loss = 0.0
         current_batch = 1
+
         # TODO: rewrite using dataloader.
+        pbar = tqdm(total=dataset_size)
         for start_index in range(0, dataset_size, batch_size):
             end_index = min(end_index, dataset_size)
 
@@ -77,10 +87,13 @@ def train_pairwise(
             cumulative_loss += loss.item()
             end_index += batch_size
             current_batch += 1
+            pbar.update(1)
 
             if current_batch % 100 == 0:
-                report = "%d: %d: loss: %.10f:" % (epoch + 1, end_index, cumulative_loss / current_batch)
-                logger.info(report)
+                pbar.set_postfix(loss=f"{cumulative_loss / current_batch:.10f}")
+
+        pbar.close()
+        logger.info(f"Finished training for epoch {epoch}. Final loss: {cumulative_loss / current_batch:.10f}")
 
         pairwise_model.eval()
         _, _, _, dev_f1 = accuracy_on_dataset("Dev", epoch + 1, pairwise_model, validation)
@@ -103,7 +116,7 @@ def accuracy_on_dataset(
     all_labels, all_predictions = run_inference(pairwise_model, features, batch_size=batch_size)
     accuracy = torch.mean((all_labels == all_predictions).float())
     tn, fp, fn, tp = get_confusion_matrix(all_labels, all_predictions)
-    precision, recall, f1 = get_prec_rec_f1(tp, fp, fn)
+    precision, recall, f1 = precision_recall_f1(tp, fp, fn)
 
     logger.info(
         "%s: %d: Accuracy: %.10f: precision: %.10f: recall: %.10f: f1: %.10f"
@@ -163,7 +176,7 @@ def init_basic_training_resources(
     random.seed(1234)
     np.random.seed(1234)
 
-    embed_utils = EmbedFromFile([train_embeddings_path, dev_embeddings_path])
+    embed_utils = EmbedFromFile([train_embeddings_path, dev_embeddings_path], use_cuda)
     pairwise_model = PairwiseModelKenton(embed_utils.embed_size, hidden_size, 1, embed_utils, use_cuda)
 
     train_dataset = DataSet.get_dataset(dataset_type, ratio=ratio, split=Split.train)
@@ -172,92 +185,80 @@ def init_basic_training_resources(
     validation_feat = dev_dataset.load_pos_neg_pickle(dev_positive_file_path, dev_negative_file_path)
 
     if use_cuda:
+        logger.info("Using cuda.")
         torch.cuda.manual_seed(1234)
         pairwise_model.cuda()
 
     return train_feat, validation_feat, pairwise_model
 
 
-def main(arguments):
+cs = ConfigStore.instance()
+cs.store(name="train_config", node=Config)
+
+
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name="train_config")
+def main(config: Config):
     start_time = datetime.now()
     dt_string = start_time.strftime("%d%m%Y_%H%M%S")
-    _output_folder = create_and_get_path("checkpoints/" + dt_string)
-    _batch_size = int(arguments.get("--bs"))
-    _learning_rate = float(arguments.get("--lr"))
-    _ratio = int(arguments.get("--ratio"))
-    _iterations = int(arguments.get("--itr"))
-    _use_cuda = True if arguments.get("--cuda").lower() == "true" else False
-    _fine_tune = True if arguments.get("--ft").lower() == "true" else False
-    _weight_decay = float(arguments.get("--wd"))
-    _hidden_size = int(arguments.get("--hidden"))
-    _dataset_arg = arguments.get("--dataset")
-
-    _train_pos_file = arguments.get("--tpf")
-    _train_neg_file = arguments.get("--tnf")
-    _dev_pos_file = arguments.get("--dpf")
-    _dev_neg_file = arguments.get("--dnf")
-    _train_embed = arguments.get("--te")
-    _dev_embed = arguments.get("--de")
-    _model_file = _output_folder + "/" + arguments.get("--mf")
+    output_folder = create_and_get_path("checkpoints/" + dt_string)
 
     log_params_str = (
         "ds_"
-        + _dataset_arg
+        + config.dataset_name
         + "_lr_"
-        + str(_learning_rate)
+        + str(config.learning_rate)
         + "_bs_"
-        + str(_batch_size)
+        + str(config.batch_size)
         + "_r"
-        + str(_ratio)
+        + str(config.negative_positive_ratio)
         + "_itr"
-        + str(_iterations)
+        + str(config.training_iterations)
     )
     # TODO: replace with simple logger.
-    create_logger_with_fh(_output_folder + "/train_" + log_params_str)
+    create_logger_with_fh(output_folder / ("train_" + log_params_str))
 
     # TODO: prettify
     logger.info(
         "train_set="
-        + _dataset_arg
+        + config.dataset_name
         + ", lr="
-        + str(_learning_rate)
+        + str(config.learning_rate)
         + ", bs="
-        + str(_batch_size)
+        + str(config.batch_size)
         + ", ratio=1:"
-        + str(_ratio)
+        + str(config.negative_positive_ratio)
         + ", itr="
-        + str(_iterations)
+        + str(config.training_iterations)
         + ", hidden_s="
-        + str(_hidden_size)
+        + str(config.hidden_size)
         + ", weight_decay="
-        + str(_weight_decay),
+        + str(config.weight_decay),
     )
 
     _event_train_feat, _event_validation_feat, _pairwise_model = init_basic_training_resources(
-        train_embeddings_path=_train_embed,
-        dev_embeddings_path=_dev_embed,
-        dataset_type=_dataset_arg,
-        train_positive_file_path=_train_pos_file,
-        train_negative_file_path=_train_neg_file,
-        dev_positive_file_path=_dev_pos_file,
-        dev_negative_file_path=_dev_neg_file,
-        ratio=_ratio,
-        hidden_size=_hidden_size,
-        use_cuda=_use_cuda,
+        train_embeddings_path=PROJECT_ROOT / config.train_embeddings_file,
+        dev_embeddings_path=PROJECT_ROOT / config.dev_embeddings_file,
+        dataset_type=DatasetEnum(config.dataset_name),
+        train_positive_file_path=PROJECT_ROOT / config.train_positive_file,
+        train_negative_file_path=PROJECT_ROOT / config.train_negative_file,
+        dev_positive_file_path=PROJECT_ROOT / config.dev_positive_file,
+        dev_negative_file_path=PROJECT_ROOT / config.dev_negative_file,
+        ratio=config.negative_positive_ratio,
+        hidden_size=config.hidden_size,
+        use_cuda=config.use_cuda,
     )
 
     train_pairwise(
         _pairwise_model,
         _event_train_feat,
         _event_validation_feat,
-        _batch_size,
-        _iterations,
-        _learning_rate,
-        model_out=_model_file,
-        weight_decay=_weight_decay,
+        config.batch_size,
+        config.training_iterations,
+        config.learning_rate,
+        model_out=config.model_name,
+        weight_decay=config.weight_decay,
     )
 
 
 if __name__ == "__main__":
-    arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
-    main(arguments)
+    main()

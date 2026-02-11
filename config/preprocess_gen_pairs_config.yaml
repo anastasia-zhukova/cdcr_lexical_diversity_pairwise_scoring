@@ -1,5 +1,5 @@
-event_validation_file: resources/wec/Dev_Event_gold_mentions_validated.json
-ratio: -1
-split: dev
+event_validation_file: resources/wec/Train_Event_gold_mentions.json
+ratio: 10
+split: train
 topic: corpus
 dataset_name: wec
