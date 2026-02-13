@@ -1,15 +1,14 @@
 import spacy
+from spacy.cli import download
 from spacy.symbols import VERB
 from spacy.util import is_package
-from spacy.cli import download
+
 
 SPACY_MODEL = "en_core_web_sm"
 
 if not is_package(SPACY_MODEL):
     print(f"spaCy model '{SPACY_MODEL}' not found. Downloading...")
     download(SPACY_MODEL)
-
-
 
 
 class SpacySyntaxAnalyzer:

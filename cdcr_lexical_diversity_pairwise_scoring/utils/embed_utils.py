@@ -7,8 +7,8 @@ from torchtyping import TensorType
 from transformers import RobertaModel, RobertaTokenizer
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionuCDCR
 from cdcr_lexical_diversity_pairwise_scoring.constants import LANGUAGE_MODEL
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionuCDCR
 
 
 @dataclass
@@ -107,7 +107,7 @@ class EmbedTransformersGenerics:
         all_sentence_tokens = torch.tensor(all_sentence_tokens)
         mention_start_index = len(context_before) + 1
         mention_end_index = len(context_before) + len(mention_span) + 1
-        return all_context_tokens, mention_start_index, mention_end_index
+        return all_sentence_tokens, mention_start_index, mention_end_index
 
     @property
     def get_embed_size(self):
