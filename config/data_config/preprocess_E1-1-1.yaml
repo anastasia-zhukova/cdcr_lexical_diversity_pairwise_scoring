@@ -2,13 +2,13 @@ dataset_folder: datasets/uCDCR
 setting: single
 type_of_pairs: random
 ratio: 10
-max_pairs_train: 1000000
+max_pairs_train: 50000
 train_scope: subtopic
 train_dataset_names:
   - ECBplus
 dev_scope: subtopic
 dev_type_of_pairs: all
-max_pairs_dev: 100000
+max_pairs_dev: 8000
 test_scope: subtopic
 test_dataset_names:
   - ECBplus
