@@ -1,12 +1,14 @@
-from pathlib import Path
-import numpy as np
 import subprocess
-import pandas as pd
 from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_name, get_dataset_config_name, get_model_config_name, get_experiment_name
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_experiment_name
+
 
 MUC = "_MUC"
 B3 = "_B3"
@@ -22,12 +24,15 @@ SPLIT = "split"
 
 CONFIG_NAME = "preprocess_test"
 
+
 def run_scorer(key_file_path: Path, response_file_path: Path):
     result_file = PROJECT_ROOT / "resources" / "conll_res.txt"
 
-    scorer_command = (f'perl {PROJECT_ROOT / "scorer" / "scorer.pl"} '
-                      f'all {key_file_path} '
-                      f'{response_file_path} none > {result_file} \n')
+    scorer_command = (
+        f'perl {PROJECT_ROOT / "scorer" / "scorer.pl"} '
+        f"all {key_file_path} "
+        f"{response_file_path} none > {result_file} \n"
+    )
 
     processes = []
     # LOGGER.info('Run CoNLL scorer perl command for CDCR')
@@ -43,16 +48,16 @@ def run_scorer(key_file_path: Path, response_file_path: Path):
     metrics_list = [MUC, B3, CEAF_M, CEAF_E, BLANC]
     params = [R, P, F1]
     i = 0
-    with open(result_file, "r") as ins:
+    with open(result_file) as ins:
         for line in ins:
             new_line = line.strip()
-            if new_line.find('F1:') != -1:
+            if new_line.find("F1:") != -1:
                 if i >= len(metrics_list):
                     break
                 f1_dict[metrics_list[i]] = {}
-                if new_line.find('Coreference') != -1:
+                if new_line.find("Coreference") != -1:
                     j = 0
-                    for value in new_line.replace("\t", " ").split(' '):
+                    for value in new_line.replace("\t", " ").split(" "):
                         if "%" not in value:
                             continue
                         param = params[j]
@@ -70,22 +75,20 @@ def run_scorer(key_file_path: Path, response_file_path: Path):
 
         avg_f1.append(metrics_vals[F1])
         for m, v in metrics_vals.items():
-            output_dict[m + metrics_name] = float(format(v, '.3f'))
+            output_dict[m + metrics_name] = float(format(v, ".3f"))
 
-    if len(avg_f1):
+    if avg_f1:
         f1_conll = np.mean(avg_f1)
     else:
-        logger.warning(f'CoNLL score was not calculated. Most likely, perl is not installed.')
+        logger.warning("CoNLL score was not calculated. Most likely, perl is not installed.")
         f1_conll = 0
 
-    output_dict[F1 + CONLL] = float(format(f1_conll, '.3f'))
+    output_dict[F1 + CONLL] = float(format(f1_conll, ".3f"))
     return output_dict
 
 
 def main(config_name: str = None):
-    """
-    Computes CoNLL scores for the experiment that we want or for everything
-    """
+    """Computes CoNLL scores for the experiment that we want or for everything"""
     now_ = datetime.now()
     save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation.csv'
     save_filename_topics = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation_topics.csv'
@@ -123,16 +126,28 @@ def main(config_name: str = None):
                         "experiment": experiment_path.name,
                         "dataset": dataset_path.name,
                         "topic": topic_path.name,
-                        "mention_type": pair_type_path.name
+                        "mention_type": pair_type_path.name,
                     }
                     key_path = topic_path / "key.key_conll"
                     response_path = topic_path / "response.response_conll"
                     conll_f1_dict = run_scorer(key_file_path=key_path, response_file_path=response_path)
                     summary_dict.update(conll_f1_dict)
-                    pair_topic_df = pd.concat([pair_topic_df, pd.DataFrame(summary_dict, index=[f'{experiment}\\{dataset}\\{pair_type}\\{topic}'])], axis=0)
+                    pair_topic_df = pd.concat(
+                        [
+                            pair_topic_df,
+                            pd.DataFrame(summary_dict, index=[f"{experiment}\\{dataset}\\{pair_type}\\{topic}"]),
+                        ],
+                        axis=0,
+                    )
 
                 summary_df_subtopic = pd.concat([summary_df_subtopic, pair_topic_df])
-                summary_df = pd.concat([summary_df, pd.DataFrame(pair_topic_df.mean(), columns=[f'{experiment}\\{dataset}\\{pair_type}\\all']).T], axis=0)
+                summary_df = pd.concat(
+                    [
+                        summary_df,
+                        pd.DataFrame(pair_topic_df.mean(), columns=[f"{experiment}\\{dataset}\\{pair_type}\\all"]).T,
+                    ],
+                    axis=0,
+                )
                 summary_df.to_csv(summary_folder / save_filename)
                 summary_df_subtopic.to_csv(summary_folder / save_filename_topics)
 
@@ -141,7 +156,7 @@ def main(config_name: str = None):
     summary_df_subtopic.to_csv(summary_folder / save_filename_topics)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # TODO Sergei fix reading the config names :) Here can be optional (None altenatively) if I want to run the scorer for all expriment data that I have
     config_name = CONFIG_NAME
     main(config_name)

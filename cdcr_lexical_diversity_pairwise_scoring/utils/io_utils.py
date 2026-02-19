@@ -10,10 +10,6 @@ def get_dataset_config_name(config_name: str):
     return config_name.split(".")[0].replace("preprocess", "datasets") + ".json"
 
 
-def get_model_name(config_name: str):
-    return config_name.split(".")[0].replace("preprocess", "model")
-
-
 def get_model_config_name(config_name: str):
     return config_name.split(".")[0].replace("preprocess", "model") + ".json"
 
@@ -62,10 +58,3 @@ def write_mention_to_json(out_file: str, mentions: list):
     mentions.sort(key=lambda x: x.mention_index)
     with open(out_file, "w+") as output:
         json.dump(mentions, output, default=lambda x: x.__dict__, indent=4, sort_keys=True, ensure_ascii=False)
-
-
-def create_and_get_path(path_to_create):
-    path_to = PROJECT_ROOT / path_to_create
-    if not os.path.exists(path_to):
-        os.makedirs(path_to)
-    return path_to

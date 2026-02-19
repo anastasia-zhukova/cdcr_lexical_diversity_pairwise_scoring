@@ -1,6 +1,8 @@
 import random
 from itertools import combinations
 
+from cdcr_lexical_diversity_pairwise_scoring import logger
+
 
 class AllPositivesStrategy:
     @staticmethod
@@ -16,8 +18,9 @@ class AllPositivesStrategy:
         )
         number_of_allowed_negatives_per_dataset = {
             dataset_name: number_of_positives * negatives_per_positive
-            for dataset_name, number_of_positives in number_of_positives_per_dataset
+            for dataset_name, number_of_positives in number_of_positives_per_dataset.items()
         }
+        logger.debug(f"Got {number_of_allowed_negatives_per_dataset=}")
 
         topic_cluster_membership = AllPositivesStrategy._get_topic_cluster_memberships(topics)
         negative_pairs = AllPositivesStrategy._create_sampled_capped_negatives(
@@ -86,9 +89,15 @@ class AllPositivesStrategy:
 
                 # we will need a permutation of the positive mentions with some selected negatives, so the number is the target number of pairs given a cluster divided by the cluster size
                 required_number_of_negative_candidates = required_number_of_negative_pairs // len(cluster)
+                logger.debug(
+                    f"Require {required_number_of_negative_candidates} negative candidates,"
+                    f" have {len(negative_candidates)}"
+                )
                 selected_negative_candidates = random.sample(
                     list(negative_candidates),
-                    required_number_of_negative_candidates,
+                    # TODO: we have to do this to avoid situation when there is not enough candidates,
+                    #   but this leads to "undertaking" the objects.
+                    min(len(negative_candidates), required_number_of_negative_candidates),
                 )
                 negative_pairs = [(a, b) for a in cluster for b in selected_negative_candidates]
                 negative_pairs_per_dataset[dataset].extend(negative_pairs)

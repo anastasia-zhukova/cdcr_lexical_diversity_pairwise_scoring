@@ -8,7 +8,7 @@ from transformers import RobertaModel, RobertaTokenizer
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.constants import LANGUAGE_MODEL
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionuCDCR
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData, MentionuCDCR
 
 
 @dataclass
@@ -158,10 +158,10 @@ class EmbedFromFile:
 
     def get_mentions_metadata(
         self,
-        mentions_list: list[MentionData],
+        mentions: list[MentionData | MentionuCDCR],
     ) -> tuple[torch.Tensor, torch.Tensor]:
         tensor_ids_required = torch.tensor(
-            [self.mention_id_to_tensor_id_mapping[m.mention_id] for m in mentions_list],
+            [self.mention_id_to_tensor_id_mapping[mention.mention_id] for mention in mentions],
             dtype=torch.long,
         )
         sizes = self.sizes[tensor_ids_required]

@@ -4,7 +4,7 @@ from pathlib import Path
 # Path variables
 _current_file_path = Path(__file__).resolve()
 PROJECT_ROOT = _current_file_path.parent.parent
-LANGUAGE_MODEL = "roberta-base"
+LANGUAGE_MODEL = "roberta-large"
 CACHED_VECTOR_PATH = PROJECT_ROOT / "resources" / f"cached_{LANGUAGE_MODEL}.pickle"
 DEFAULT_RATIO = 20
 DEFAULT_TRAIN = 40000
@@ -32,7 +32,6 @@ ALLOWED_TOPICS = {
 }
 MIN_STD = 0.03
 DENOM_DELTA = 4
-USE_CUDA = False
 MAX_ALLOWED_BATCH_SIZE = 20000
 CLUSTERING_THRESHOLD = 0.5
 EXCLUDE_SINGLETONS = True

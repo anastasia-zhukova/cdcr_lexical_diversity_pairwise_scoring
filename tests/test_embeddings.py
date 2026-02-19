@@ -14,7 +14,16 @@ class TestEmbeddings(unittest.TestCase):
 
         context_all1 = (context_before * 5) + mention_str + (context_after * 5)
         sanity_ment = MentionData(
-            "-1", "-1", "-1", -1, list(range(5, 9)), " ".join(mention_str), context_all1, "None", "None", "None"
+            "-1",
+            "-1",
+            "-1",
+            -1,
+            list(range(5, 9)),
+            " ".join(mention_str),
+            context_all1,
+            "None",
+            "None",
+            "None",
         )
         ret_context_before, ret_mention, ret_context_after = (
             EmbedTransformersGenerics.extract_mention_surrounding_context(sanity_ment)
@@ -26,7 +35,16 @@ class TestEmbeddings(unittest.TestCase):
 
         context_all2 = (context_before * 5) + mention_str + (context_after * 5)
         sanity_ment = MentionData(
-            "-1", "-1", "-1", -1, list(range(5, 9)), " ".join(mention_str), context_all2, "None", "None", "None"
+            "-1",
+            "-1",
+            "-1",
+            -1,
+            list(range(5, 9)),
+            " ".join(mention_str),
+            context_all2,
+            "None",
+            "None",
+            "None",
         )
         ret_context_before, ret_mention, ret_context_after = (
             EmbedTransformersGenerics.extract_mention_surrounding_context(sanity_ment)
@@ -38,7 +56,16 @@ class TestEmbeddings(unittest.TestCase):
 
         context_all3 = (context_before * 5) + mention_str + (context_after * 10)
         sanity_ment = MentionData(
-            "-1", "-1", "-1", -1, list(range(5, 9)), " ".join(mention_str), context_all3, "None", "None", "None"
+            "-1",
+            "-1",
+            "-1",
+            -1,
+            list(range(5, 9)),
+            " ".join(mention_str),
+            context_all3,
+            "None",
+            "None",
+            "None",
         )
         ret_context_before, ret_mention, ret_context_after = (
             EmbedTransformersGenerics.extract_mention_surrounding_context(sanity_ment)
@@ -50,7 +77,16 @@ class TestEmbeddings(unittest.TestCase):
 
         context_all4 = (context_before * 10) + mention_str + (context_after * 5)
         sanity_ment = MentionData(
-            "-1", "-1", "-1", -1, list(range(10, 14)), " ".join(mention_str), context_all4, "None", "None", "None"
+            "-1",
+            "-1",
+            "-1",
+            -1,
+            list(range(10, 14)),
+            " ".join(mention_str),
+            context_all4,
+            "None",
+            "None",
+            "None",
         )
         ret_context_before, ret_mention, ret_context_after = (
             EmbedTransformersGenerics.extract_mention_surrounding_context(sanity_ment)
@@ -62,7 +98,16 @@ class TestEmbeddings(unittest.TestCase):
 
         context_all5 = mention_str + (context_after * 5)
         sanity_ment = MentionData(
-            "-1", "-1", "-1", -1, list(range(0, 4)), " ".join(mention_str), context_all5, "None", "None", "None"
+            "-1",
+            "-1",
+            "-1",
+            -1,
+            list(range(4)),
+            " ".join(mention_str),
+            context_all5,
+            "None",
+            "None",
+            "None",
         )
         ret_context_before, ret_mention, ret_context_after = (
             EmbedTransformersGenerics.extract_mention_surrounding_context(sanity_ment)
@@ -74,7 +119,16 @@ class TestEmbeddings(unittest.TestCase):
 
         context_all6 = (context_before * 5) + mention_str
         sanity_ment = MentionData(
-            "-1", "-1", "-1", -1, list(range(5, 9)), " ".join(mention_str), context_all6, "None", "None", "None"
+            "-1",
+            "-1",
+            "-1",
+            -1,
+            list(range(5, 9)),
+            " ".join(mention_str),
+            context_all6,
+            "None",
+            "None",
+            "None",
         )
         ret_context_before, ret_mention, ret_context_after = (
             EmbedTransformersGenerics.extract_mention_surrounding_context(sanity_ment)
@@ -102,7 +156,7 @@ class TestEmbeddings(unittest.TestCase):
                     + joined_ment_string
                     + '" != "'
                     + mention.tokens_str
-                    + '"'
+                    + '"',
                 )
 
         print("Test test_extract_mention_surrounding_context Passed!")
@@ -128,11 +182,16 @@ class TestEmbeddings(unittest.TestCase):
                         + ", "
                         + str(decoded)
                         + " != "
-                        + str(decoded_from_method)
+                        + str(decoded_from_method),
                     )
                 else:
                     print(
-                        "MentionId=" + str(mention.mention_id) + ", " + str(decoded) + " != " + str(decoded_from_method)
+                        "MentionId="
+                        + str(mention.mention_id)
+                        + ", "
+                        + str(decoded)
+                        + " != "
+                        + str(decoded_from_method),
                     )
 
         print("Test test_mention_feat_to_vec Passed")

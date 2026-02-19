@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 
+from cdcr_lexical_diversity_pairwise_scoring import logger
+
 
 class PairwiseModelKenton(nn.Module):
     def __init__(self, f_in_dim, f_hidden_dim, f_out_dim, embeddings_holder, use_cuda):
@@ -23,8 +25,8 @@ class PairwiseModelKenton(nn.Module):
 
     def forward(self, batch_features: list, bs):
         embedded_features, gold_labels = self._get_bert_rep(batch_features, bs)
-        prediction = self.W(self.pairwise(embedded_features))
-        return prediction, gold_labels
+        logits = self.W(self.pairwise(embedded_features))
+        return logits, gold_labels
 
     def predict(self, batch_features, bs):
         output, gold_labels = self.__call__(batch_features, bs)

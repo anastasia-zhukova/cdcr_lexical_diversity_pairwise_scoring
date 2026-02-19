@@ -7,6 +7,7 @@ from typing import Self
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.constants import *
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionuCDCR
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.pairs_strategies import (
     AllPositivesStrategy,
     ContrastiveStrategy,
@@ -89,8 +90,8 @@ class uCDCRDataSet(DataSet):
         )
         self.topics.convert_to_clusters()
 
-        self.positive_pairs = []
-        self.negative_pairs = []
+        self.positive_pairs: list[tuple[MentionuCDCR, MentionuCDCR]] = []
+        self.negative_pairs: list[tuple[MentionuCDCR, MentionuCDCR]] = []
 
     @staticmethod
     def _get_negatives_per_positive(
@@ -175,11 +176,11 @@ class uCDCRDataSet(DataSet):
             global_mention_entities,
         )
 
-    # TODO: turn to static
-    def get_mix_pairs(self):
+    def get_mix_pairs(self) -> list[tuple[MentionuCDCR, MentionuCDCR]]:
         """Returns all mention pairs combined"""
         all_pairs = self.positive_pairs + self.negative_pairs
-        return random.shuffle(all_pairs)
+        random.shuffle(all_pairs)
+        return all_pairs
 
     def save_dataset(self, save_path: Path):
         save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -188,10 +189,12 @@ class uCDCRDataSet(DataSet):
         logger.info(f"Saved positive pairs in {save_path}.")
 
     def generate_pairs(self):
-        """Generate pairs depending on the method for the pair genenegatives_per_positiven"""
-        logger.info(f"Generating mention pairs using {self.type_of_pairs} strategy. ")
+        """Generate pairs depending on the method for the pair generation"""
+        if self.split != Split.test:
+            logger.info(f"Generating mention pairs using {self.type_of_pairs} strategy.")
 
         if self.split == Split.test:
+            logger.info(f"Generating mention pairs for final evaluation.")
             positive_pairs, negative_pairs = EvaluationStrategy.create_pairs(
                 topics=self.topics,
                 mention_ids_events=self.mention_ids_events,
@@ -239,6 +242,9 @@ class uCDCRDataSet(DataSet):
 
         else:
             raise NotImplementedError
+
+        logger.info(f"Got positive pairs: {len(positive_pairs)}")
+        logger.info(f"Got negative pairs: {len(negative_pairs)}")
 
         self.positive_pairs = positive_pairs
         self.negative_pairs = negative_pairs
@@ -305,7 +311,11 @@ class uCDCRDataSet(DataSet):
                     type_of_pairs=config.type_of_pairs,
                     dataset_scope=config.train_scope,
                     max_total_pairs=config.max_pairs_train,
-                    negatives_per_positive=config.ratio,
+                    negatives_per_positive=cls._get_negatives_per_positive(
+                        config.ratio,
+                        type_of_pairs=config.type_of_pairs,
+                        default_ratio=DEFAULT_RATIO,
+                    ),
                     dataset_names=config.train_dataset_names,
                 )
             elif split == Split.dev:
@@ -314,7 +324,11 @@ class uCDCRDataSet(DataSet):
                     type_of_pairs=config.dev_type_of_pairs,
                     dataset_scope=config.dev_scope,
                     max_total_pairs=config.max_pairs_dev,
-                    negatives_per_positive=config.ratio,
+                    negatives_per_positive=cls._get_negatives_per_positive(
+                        config.ratio,
+                        type_of_pairs=config.dev_type_of_pairs,
+                        default_ratio=DEFAULT_RATIO,
+                    ),
                     dataset_names=config.train_dataset_names,
                 )
             else:

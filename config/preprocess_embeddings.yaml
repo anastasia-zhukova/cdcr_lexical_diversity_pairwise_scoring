@@ -1,0 +1,6 @@
+defaults:
+  - data_config: preprocess_E1-1-1
+  - _self_
+
+use_cuda: true
+max_surrounding_context: -1

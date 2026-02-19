@@ -8,41 +8,49 @@ Options:
     --print=<PrintFormat>                   readable/conll - print in human readable format or in the conll format [default: conll]
     --alt=<AverageLinkThresh>               The link threshold for the clustering algorithm [default: 0.7]
 """
+
 import json
 import pickle
+from itertools import chain
+from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import torch
-import numpy as np
-from pathlib import Path
-from itertools import chain
-from sklearn.cluster import AgglomerativeClustering
 from hydra.core.config_store import ConfigStore
-from typing import List
+from sklearn.cluster import AgglomerativeClustering
 from tqdm import tqdm
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.cluster import Clusters
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
-from cdcr_lexical_diversity_pairwise_scoring.utils.clustering_utils import agglomerative_clustering
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import write_coref_scorer_results, write_coref_scorer_results_simple
-from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
+from cdcr_lexical_diversity_pairwise_scoring.constants import (
+    CACHED_VECTOR_PATH,
+    CLUSTERING_THRESHOLD,
+    MAX_ALLOWED_BATCH_SIZE,
+    PROJECT_ROOT,
+    USE_CUDA,
+)
 from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
-from cdcr_lexical_diversity_pairwise_scoring.constants import MAX_ALLOWED_BATCH_SIZE, PROJECT_ROOT, CLUSTERING_THRESHOLD, CACHED_VECTOR_PATH, USE_CUDA
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_name, get_dataset_config_name, get_model_config_name, get_experiment_name
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet, EvalPairsType
+from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import (
+    get_dataset_config_name,
+    get_experiment_name,
+    get_model_config_name,
+    write_coref_scorer_results_simple,
+)
+
 
 CONFIG_NAME = "preprocess_test"
 cs = ConfigStore.instance()
 cs.store(name=CONFIG_NAME, node=Config)
 
 agl_clust = AgglomerativeClustering(
-        n_clusters=None,
-        metric="precomputed",
-        linkage="average",
-        distance_threshold=CLUSTERING_THRESHOLD,
-    )
+    n_clusters=None,
+    metric="precomputed",
+    linkage="average",
+    distance_threshold=CLUSTERING_THRESHOLD,
+)
 
 
 def get_pairwise_model(
@@ -80,14 +88,21 @@ def predict_and_cluster(
         logger.info(f"Scoring dataset {dataset}")
         experiment_results_dict[dataset] = {}
 
-        for topic_id, mention_config in tqdm(topic_dict.items(), desc=f"Scoring topics in {dataset}", total=len(topic_dict)):
+        for topic_id, mention_config in tqdm(
+            topic_dict.items(),
+            desc=f"Scoring topics in {dataset}",
+            total=len(topic_dict),
+        ):
             mention_topic_dict = {m.mention_id: m for m in test_dataset.topics[topic_id].mentions}
             experiment_results_dict[dataset][topic_id] = {}
 
             for pairs_type in list(mention_config.keys()):
                 experiment_results_dict[dataset][topic_id][pairs_type] = []
 
-                all_pairs = test_dataset.positive_pairs_eval_format[pairs_type] + test_dataset.negative_pairs_eval_format[pairs_type]
+                all_pairs = (
+                    test_dataset.positive_pairs_eval_format[pairs_type]
+                    + test_dataset.negative_pairs_eval_format[pairs_type]
+                )
                 key = f"{dataset}_{topic_id}_{pairs_type}"
                 if key in predictions:
                     all_scores = predictions[key]
@@ -96,8 +111,14 @@ def predict_and_cluster(
                     predictions[key] = all_scores
 
                 # correctly reshape mentions now
-                used_mention_ids = list(set(chain.from_iterable([[pair[0].mention_id, pair[0].mention_id] for pair in all_pairs])))
-                sim_df = pd.DataFrame(np.zeros((len(used_mention_ids), len(used_mention_ids))), index=used_mention_ids, columns=used_mention_ids)
+                used_mention_ids = list(
+                    set(chain.from_iterable([[pair[0].mention_id, pair[0].mention_id] for pair in all_pairs])),
+                )
+                sim_df = pd.DataFrame(
+                    np.zeros((len(used_mention_ids), len(used_mention_ids))),
+                    index=used_mention_ids,
+                    columns=used_mention_ids,
+                )
                 for i, pair in enumerate(all_pairs):
                     sim_df.loc[pair[0].mention_id, pair[1].mention_id] = all_scores[i]
                     sim_df.loc[pair[1].mention_id, pair[2].mention_id] = all_scores[i]
@@ -106,14 +127,40 @@ def predict_and_cluster(
                 true_clusters = [mention_topic_dict[m_id].coref_chain for m_id in used_mention_ids]
                 predicted_clusters = clustering.labels_
 
-                output_folder_true = PROJECT_ROOT / "evaluation_results" / "input_files" / experiment_name / dataset / pairs_type / topic_id
+                output_folder_true = (
+                    PROJECT_ROOT
+                    / "evaluation_results"
+                    / "input_files"
+                    / experiment_name
+                    / dataset
+                    / pairs_type
+                    / topic_id
+                )
                 output_folder_true.mkdir(parents=True, exist_ok=True)
                 write_coref_scorer_results_simple(true_clusters, output_folder_true, topic_id, predictions=False)
                 write_coref_scorer_results_simple(predicted_clusters, output_folder_true, topic_id, predictions=True)
 
                 for i, m_id in enumerate(used_mention_ids):
                     m = mention_topic_dict[m_id]
-                    m_save = {k: v for k, v in dict(m.__dict__) if k in ["mention_id", "tokens_str", "coref_chain", "topic", "subtopic", "doc", "topic_id",  "subtopic_id", "doc_id", "dataset", "mention_context", "tokens_number_context"]}
+                    m_save = {
+                        k: v
+                        for k, v in dict(m.__dict__)
+                        if k
+                        in [
+                            "mention_id",
+                            "tokens_str",
+                            "coref_chain",
+                            "topic",
+                            "subtopic",
+                            "doc",
+                            "topic_id",
+                            "subtopic_id",
+                            "doc_id",
+                            "dataset",
+                            "mention_context",
+                            "tokens_number_context",
+                        ]
+                    }
                     m_save["predicted_coref_chain"] = f"{dataset}_{topic_id}_{predicted_clusters[i]}"
                     experiment_results_dict[dataset][topic_id][pairs_type].append(m_save)
 
@@ -126,18 +173,18 @@ def predict_and_cluster(
     with exp_dict_path.open("w") as file:
         json.dump(experiment_results_dict, file)
 
-    logger.info(f"The files for the CoNLL scorer are saved into: {PROJECT_ROOT / 'evaluation_results' / 'input_files' / experiment_name}.")
+    logger.info(
+        f"The files for the CoNLL scorer are saved into: {PROJECT_ROOT / 'evaluation_results' / 'input_files' / experiment_name}.",
+    )
     logger.info(f"The files with true and predicted clusters are saved into: {exp_dict_path}.")
 
 
-def score_mention_pairs(model: PairwiseModelKenton, all_pairs: list) -> List[float]:
-    """
-    Run the mention scoring model in the prediction mode.
-    """
+def score_mention_pairs(model: PairwiseModelKenton, all_pairs: list) -> list[float]:
+    """Run the mention scoring model in the prediction mode."""
     pairs_chunks = [all_pairs]
     if len(all_pairs) > MAX_ALLOWED_BATCH_SIZE:
         pairs_chunks = [
-            all_pairs[i: i + MAX_ALLOWED_BATCH_SIZE] for i in range(0, len(all_pairs), MAX_ALLOWED_BATCH_SIZE)
+            all_pairs[i : i + MAX_ALLOWED_BATCH_SIZE] for i in range(0, len(all_pairs), MAX_ALLOWED_BATCH_SIZE)
         ]
     predictions = np.empty(0)
     with torch.no_grad():
@@ -151,12 +198,12 @@ def score_mention_pairs(model: PairwiseModelKenton, all_pairs: list) -> List[flo
 def main(config_name: str):
     model_config_name = get_model_config_name(config_name)
     model_config_path = PROJECT_ROOT / "config" / model_config_name
-    with open(model_config_path, "r") as file:
+    with open(model_config_path) as file:
         model_config = json.load(file)
 
     file_name = get_dataset_config_name(config_name)
     dataset_file_path = PROJECT_ROOT / "config" / file_name
-    with open(dataset_file_path, "r") as file:
+    with open(dataset_file_path) as file:
         dataset_config = json.load(file)
 
     model = get_pairwise_model(

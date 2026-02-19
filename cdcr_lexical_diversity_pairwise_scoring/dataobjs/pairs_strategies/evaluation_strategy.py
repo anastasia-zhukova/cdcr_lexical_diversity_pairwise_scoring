@@ -3,6 +3,8 @@ from enum import StrEnum
 from itertools import combinations
 from typing import Container
 
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionuCDCR
+
 
 # TODO: remove duplication
 class EvalPairsType(StrEnum):
@@ -18,7 +20,10 @@ class EvaluationStrategy:
         mention_ids_events: Container[str],
         mention_ids_entities: Container[str],
         exclude_singletons: bool,
-    ) -> tuple[dict, dict]:
+    ) -> tuple[
+        dict[str, dict[str, dict[EvalPairsType, list[MentionuCDCR]]]],
+        dict[str, dict[str, dict[EvalPairsType, list[MentionuCDCR]]]],
+    ]:
         topic_ids_by_dataset = defaultdict(list)
         for topic_id, dataset in topics.topics_to_datasets.items():
             topic_ids_by_dataset[dataset].append(topic_id)
@@ -66,7 +71,7 @@ class EvaluationStrategy:
         mention_ids_events,
         mention_ids_entities,
         exclude_singletons: bool,
-    ):
+    ) -> list[MentionuCDCR]:
         all_mentions = topics.topics_dict[topic_id].mentions
         if pair_type == EvalPairsType.events.value:
             mentions = [mention for mention in all_mentions if mention.mention_id in mention_ids_events]

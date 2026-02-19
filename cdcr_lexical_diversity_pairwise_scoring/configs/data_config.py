@@ -23,7 +23,7 @@ class DataConfig:
     # test_type_of_pairs is always set to MentionPairStrategy.all
     ##
     max_pairs_train: int
-    max_pairs_dev: int
+    max_pairs_dev: int | None
     # max_pairs_test is always set to None
     ##
     train_dataset_names: list[str]  # Shared with dev_dataset_name

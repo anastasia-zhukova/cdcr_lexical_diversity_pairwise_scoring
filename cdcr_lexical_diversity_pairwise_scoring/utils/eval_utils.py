@@ -1,7 +1,10 @@
 from sklearn.metrics import confusion_matrix
 
+from cdcr_lexical_diversity_pairwise_scoring import logger
+
 
 def get_confusion_matrix(y_true, y_pred):
+    logger.info("Doing confusion matrix.")
     return confusion_matrix(y_true, y_pred).ravel()
 
 

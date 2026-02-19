@@ -22,11 +22,10 @@ cs = ConfigStore.instance()
 cs.store(name=CONFIG_NAME, node=DataConfig)
 
 
-@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config/data_configs"), config_name=CONFIG_NAME)
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config/data_config"), config_name=CONFIG_NAME)
 def main(config: DataConfig) -> None:
     logger.debug(config)
     random.seed(0)
-    dataset_dict = {}
 
     if config.setting == DatasetSetting.single:
         if len(config.train_dataset_names) > 1:
@@ -56,7 +55,6 @@ def main(config: DataConfig) -> None:
         # TODO: refactor inside dataset
         save_path = PROJECT_ROOT / "resources/datasets" / f"{dataset.dataset_name}.pkl"
         dataset.save_dataset(save_path)
-        dataset_dict[split.value] = str(save_path)
 
     logger.info(f"The paths to the created datasets for the current experiment config is saved")
 
