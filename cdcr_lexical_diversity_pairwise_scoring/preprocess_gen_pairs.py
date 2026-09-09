@@ -28,7 +28,7 @@ from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import ScopeConfig
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_dataset_name
 
 # TODO Sergei: fix the configs to be pluggable for each experiment
-CONFIG_NAME = "preprocess_test"
+CONFIG_NAME = "preprocess_test_random"
 
 @dataclass
 class Config:
@@ -39,6 +39,7 @@ class Config:
     max_pairs_train: int
     train_scope: ScopeConfig
     train_dataset_names: List[str]
+    dev_dataset_names: List[str]
     dev_scope: ScopeConfig
     dev_type_of_pairs: MentionPairStrategy
     max_pairs_dev: int
@@ -86,6 +87,7 @@ def main(config: Config) -> None:
         save_path = create_dataset_name(split, type_of_pairs, scope, max_pairs, ratio, dataset.dataset_components)
         if save_path.exists():
             logger.info(f"A dataset for {split.value} with the same config (path {str(save_path)}) already exists. Skipped.")
+            dataset_dict[split.value] = str(save_path)
             continue
 
         dataset.generate_pairs()

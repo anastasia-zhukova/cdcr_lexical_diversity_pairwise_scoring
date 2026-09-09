@@ -60,7 +60,6 @@ Note that to save space, the cached vectors are reused across the experiments an
 ## 2. Training
 See `train.py` file header for the complete set of script parameters.
 Model file will be saved at output folder (for each iteration that improves).
-- For training over ECB+:<br/>
 ```
 python cdcr_lexical_diversity_pairwise_scoring/train.py preprocess_text.yaml 
 ```

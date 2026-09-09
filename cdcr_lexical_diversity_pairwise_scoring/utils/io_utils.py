@@ -45,19 +45,23 @@ def write_coref_scorer_results(
 
 def write_coref_scorer_results_simple(
     chain_values_per_mention: list[str] | list[int],
+    mentions: list[str],
+    mention_type: str,
     output_file: Path,
+    dataset: str,
     topic_id: str,
     predictions: bool = True
 ) -> None:
     if predictions:
-        file_path = output_file / "response.response_conll"
+        file_path = output_file / "response.conll"
     else:
-        file_path = output_file / "key.key_conll"
-
+        file_path = output_file / "key.conll"
     with file_path.open("w") as file:
-        file.write(f"#begin document ({topic_id}); part 000")
-        for chain in chain_values_per_mention:
-            file.write(f"\n{topic_id}\t({chain})")
+        file.write(f"#begin document ({dataset}/{mention_type}/{topic_id}); part 000")
+
+        for mention_id, chain in zip(mentions, chain_values_per_mention):
+            # ECBplusMETAm/entities/36ecb
+            file.write(f"\n{dataset}/{mention_type}/{topic_id}\t{mention_id}\t({chain})")
         file.write("\n#end document")
 
 

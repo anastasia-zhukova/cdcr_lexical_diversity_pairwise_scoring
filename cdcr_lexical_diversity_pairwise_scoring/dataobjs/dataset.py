@@ -193,11 +193,11 @@ def filter_and_update_mention_attributes(mentions, dataset_name: str):
             if m["topic"] not in ALLOWED_TOPICS[dataset_name]:
                 continue
 
-        m["mention_id"] = f"{dataset_name}_{m['topic_id']}_{m['subtopic_id']}_{m['mention_id']}"
+        # m["mention_id"] = f"{dataset_name}_{m['topic_id']}_{m['subtopic_id']}_{m['mention_id']}"
         m["dataset"] = dataset_name
         m["coref_chain"] = f"{dataset_name}_{m['topic_id']}_{m['coref_chain']}"
-        m["subtopic_id"] = f"{dataset_name}_{m['subtopic_id']}"
-        m["topic_id"] = f"{dataset_name}_{m['topic_id']}"
+        # m["subtopic_id"] = f"{dataset_name}_{m['subtopic_id']}"
+        # m["topic_id"] = f"{dataset_name}_{m['topic_id']}"
         mentions_new.append(m)
         mention_ids.append(m["mention_id"])
     return mentions_new, mention_ids
@@ -223,10 +223,10 @@ class uCDCRDataSet(DataSet):
         mentions_entity = []
         self.dataset_components = []
         self.setting = config.setting
-        if self.setting == DatasetSetting.single:
-            self.target_datasets = [config.test_dataset_names[0]]
-        else:
-            self.target_datasets = config.test_dataset_names
+        # if self.setting == DatasetSetting.single:
+        #     self.target_datasets = [config.train_dataset_names[0]]
+        # else:
+        #     self.target_datasets = config.test_dataset_names
         dataset_folder = Path(config.dataset_folder)
         self.topics = Topics()
         # in case of test datasets, these lists of ids will help split into only events and only entities
@@ -247,12 +247,12 @@ class uCDCRDataSet(DataSet):
 
             # check if single, then other datasets are ignores
             if self.setting == DatasetSetting.single and len(config.train_dataset_names) > 1:
-                logger.warning(f'More datasets provided in the "single" setting. Only the first target dataset will be used as training data: {self.target_datasets} ')
-                config.train_dataset_names = self.target_datasets
+                logger.warning(f'More datasets provided in the "single" setting. Only the first target dataset will be used as training data: {config.train_dataset_names[0]} ')
+                config.train_dataset_names = config.train_dataset_names[0]
 
             # read the train data
             for dataset_name in config.train_dataset_names:
-                if self.setting == DatasetSetting.excluding_target and dataset_name in self.target_datasets:
+                if self.setting == DatasetSetting.excluding_target and dataset_name in config.test_dataset_names:
                     continue
 
                 split_folder = dataset_folder / dataset_name / split.value
@@ -269,9 +269,6 @@ class uCDCRDataSet(DataSet):
                     mentions_entity.extend(entity_mentions)
 
         elif split == Split.dev:
-            if self.setting == DatasetSetting.single and len(config.train_dataset_names) > 1:
-                logger.warning(f'More datasets provided in the "single" setting. Only the target dataset will be used as dev data: {self.target_datasets} ')
-                config.train_dataset_names = self.target_datasets
 
             # save the attributes related to train
             self.type_of_pairs = config.dev_type_of_pairs
@@ -283,8 +280,8 @@ class uCDCRDataSet(DataSet):
             self.dataset_scope = config.dev_scope
 
             # read the dev data
-            for dataset_name in config.train_dataset_names:
-                if self.setting == DatasetSetting.excluding_target and dataset_name in self.target_datasets:
+            for dataset_name in config.dev_dataset_names:
+                if self.setting == DatasetSetting.excluding_target and dataset_name in config.test_dataset_names:
                     continue
 
                 split_folder = dataset_folder / dataset_name / split.value
@@ -305,7 +302,7 @@ class uCDCRDataSet(DataSet):
             if self.dataset_scope == ScopeConfig.corpus and len(config.test_dataset_names) > 1:
                 raise ValueError(f"The configuration of the {self.dataset_scope} and more than one test dataset can't be possible for the dataset preparation. Change the scope to {ScopeConfig.dataset}.")
 
-            for dataset_name in self.target_datasets:
+            for dataset_name in config.test_dataset_names:
                 split_folder = dataset_folder / dataset_name / split.value
                 event_mentions, entity_mentions, mention_ids_events, mention_ids_entities = read_mention_files(split_folder, dataset_name)
                 self.mention_ids_events.extend(mention_ids_events)
@@ -353,11 +350,11 @@ class uCDCRDataSet(DataSet):
             # dev
             # both positives and negatives are capped given the max number and the ratio
             if self.max_pairs is not None and self.split == Split.dev:
-                self.create_all_pairs_capped()
+                self.create_all_pairs_capped(same_mention_type=False)
 
             # extensive dev with all positives but negatives are capped to the ratio
             elif self.max_pairs is None and self.split == Split.dev:
-                self.create_all_pairs_negatives_capped()
+                self.create_all_pairs_negatives_capped(same_mention_type=False)
 
             # test
             else:
@@ -366,9 +363,9 @@ class uCDCRDataSet(DataSet):
 
         if self.type_of_pairs == MentionPairStrategy.random:
             if self.max_pairs is not None:
-                self.create_all_pairs_capped()
+                self.create_all_pairs_capped(same_mention_type=True)
             else:
-                self.create_all_pairs_negatives_capped()
+                self.create_all_pairs_negatives_capped(same_mention_type=True)
 
         if self.type_of_pairs in [MentionPairStrategy.tfidf, MentionPairStrategy.embedding, MentionPairStrategy.encoder]:
             self.create_contrastive_pairs()
@@ -695,7 +692,7 @@ class uCDCRDataSet(DataSet):
         return topic_embed_df, sim_df
 
 
-    def create_all_pairs_capped(self):
+    def create_all_pairs_capped(self, same_mention_type: bool):
         """
         Created all mention pairs or the upper triangle, caps them, and only takes up as much as the limit allows
         """
@@ -760,7 +757,7 @@ class uCDCRDataSet(DataSet):
                 self.positive_pairs.extend(not_used_mentions_pairs[d][:diff])
 
         negative_n_max = (self.max_pairs - positive_n_max * len(self.dataset_components)) // len(self.dataset_components)
-        self._create_capped_negatives({d: negative_n_max for d in self.dataset_components}, used_topics, ratio)
+        self._create_capped_negatives({d: negative_n_max for d in self.dataset_components}, used_topics, ratio, same_mention_type)
 
     def create_all_pairs_eval_format(self):
         """
@@ -833,7 +830,7 @@ class uCDCRDataSet(DataSet):
         return positive_counter, used_topics
 
 
-    def create_all_pairs_negatives_capped(self):
+    def create_all_pairs_negatives_capped(self, same_mention_type: bool):
         """
         Just in case we want all positives but not overwhelm with negatives. Does not balance per dataset,
         so the number of negatives will be proportional to the number of positives per dataset.
@@ -841,10 +838,10 @@ class uCDCRDataSet(DataSet):
         positive_counter_datasets, used_topics = self.create_all_pairs()
         ratio = self.ratio if self.ratio > -1 else DEFAULT_RATIO
         negative_counter_datasets = {d: ratio * pos for d, pos in positive_counter_datasets}
-        self._create_capped_negatives(negative_counter_datasets, used_topics, ratio)
+        self._create_capped_negatives(negative_counter_datasets, used_topics, ratio, same_mention_type)
 
 
-    def _create_capped_negatives(self, max_topic_negatives: dict, used_topics: dict, ratio: int):
+    def _create_capped_negatives(self, max_topic_negatives: dict, used_topics: dict, ratio: int, same_mention_type: bool):
         """
         Stratified negative creation based on the positive pairs
         """
@@ -856,23 +853,40 @@ class uCDCRDataSet(DataSet):
             if t_id not in used_topics:
                 continue
 
-            mention_ids = {m.mention_id for m in topic.mentions}
+            mention_ids_topic = {m.mention_id: m for m in topic.mentions}
             for positive_mentions_cluster in used_topics[t_id]:
-                # all other mentions outside a cluster are negatives
-                negative_candidate = mention_ids - positive_mentions_cluster
+
+                if same_mention_type:
+                    # only entities as negatives
+                    if list(positive_mentions_cluster)[0] in self.mention_ids_entities:
+                        negative_mentions = [m_id for m_id in set(self.mention_ids_entities) - positive_mentions_cluster if m_id in mention_ids_topic]
+                    else:
+                        negative_mentions = [m_id for m_id in set(self.mention_ids_events) - positive_mentions_cluster if m_id in mention_ids_topic]
+                else:
+                    # all other mentions outside a cluster are negatives
+                    negative_mentions = list(set(mention_ids_topic) - positive_mentions_cluster)
+
                 # all combinations of the positive mentions
                 pos_num_pairs = len(positive_mentions_cluster) * (len(positive_mentions_cluster) - 1) // 2
-                neg_num_pairs = pos_num_pairs * ratio
-                # we will need a permutation of the positive mentions with some selected negatives, so the number is the target number of pairs given a cluster divided by the cluster size
-                neg_num = neg_num_pairs // len(positive_mentions_cluster)
-                negative_mentions = random.sample(list(negative_candidate), neg_num)
-                negative_pairs = [(a, b) for a in positive_mentions_cluster for b in negative_mentions]
+                neg_num_pairs_max = pos_num_pairs * ratio
+
+                negative_pairs = []
+                for pos in list(positive_mentions_cluster):
+                    if len(negative_pairs) == neg_num_pairs_max:
+                        break
+
+                    for neg in negative_mentions:
+                        if len(negative_pairs) == neg_num_pairs_max:
+                            break
+
+                        negative_pairs.append((mention_ids_topic[pos], mention_ids_topic[neg]))
+
                 negative_pairs_dataset[dataset].extend(negative_pairs)
 
         for d, negatives in negative_pairs_dataset.items():
             random.shuffle(negatives)
             self.negative_pairs.extend(negatives[:max_topic_negatives[d]])
-
+        a = 0
 
 
 

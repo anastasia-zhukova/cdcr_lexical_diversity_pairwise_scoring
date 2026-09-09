@@ -42,7 +42,7 @@ random.seed(1234)
 np.random.seed(1234)
 logger = logging.getLogger(__name__)
 
-CONFIG_NAME = "preprocess_test"
+CONFIG_NAME = "preprocess_test_random"
 cs = ConfigStore.instance()
 cs.store(name=CONFIG_NAME, node=Config)
 
@@ -197,8 +197,8 @@ def main(arguments, config_name: str):
     start_time = datetime.now()
     dt_string = start_time.strftime("%d%m%Y_%H%M%S")
     _output_folder = create_and_get_path("checkpoints/" + dt_string)
-    _batch_size = int(arguments.get("--bs", 16))
-    _learning_rate = float(arguments.get("--lr", 5e-4))
+    _batch_size = int(arguments.get("--bs", 32))
+    _learning_rate = float(arguments.get("--lr", 5e-5))
     _iterations = int(arguments.get("--itr", 10))
     _use_cuda = True if arguments.get("--cuda").lower() == "true" else False
     _fine_tune = True if arguments.get("--ft").lower() == "true" else False
@@ -256,13 +256,13 @@ def main(arguments, config_name: str):
         model_out=_model_file,
         weight_decay=_weight_decay,
     )
-    run_results = {"eval_dev": eval_res, "model": best_model_path}
+    run_results = {"eval_dev": eval_res, "model": str(best_model_path)}
 
     # TODO Sergei proper saving to config with the best model
     model_config_name = get_model_config_name(config_name)
     model_config_path = PROJECT_ROOT / "config" / model_config_name
-    with open(model_config_name, "w") as file:
-        json.dump(run_results, model_config_path)
+    with open(model_config_path, "w", encoding="utf-8") as file:
+        json.dump(run_results, file)
 
 
 if __name__ == "__main__":

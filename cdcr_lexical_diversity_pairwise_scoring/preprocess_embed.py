@@ -32,7 +32,7 @@ from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, USE_CUDA, CACHED_VECTOR_PATH
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet
 
-CONFIG_NAME = "preprocess_test"
+CONFIG_NAME = "preprocess_test_random"
 cs = ConfigStore.instance()
 cs.store(name=CONFIG_NAME, node=Config)
 torch.manual_seed(0)
@@ -49,11 +49,27 @@ def encode_dataset_mentions(dataset: uCDCRDataSet, embed_model: EmbedTransformer
     else:
         encoded_mentions = {}
 
+    # encoding only mentions from the created pairs
+    mentions_to_encode = set()
+    for mention_pair in dataset.positive_pairs + dataset.negative_pairs:
+        mentions_to_encode.add(mention_pair[0].mention_id)
+        mentions_to_encode.add(mention_pair[1].mention_id)
+
+    if len(dataset.positive_pairs_eval_format):
+        for dataset_name, topic_dict in dataset.positive_pairs_eval_format.items():
+            for topic_id, mention_types_dict in topic_dict.items():
+                for mention_pair in mention_types_dict["mix"] + dataset.negative_pairs_eval_format[dataset_name][topic_id]["mix"]:
+                    mentions_to_encode.add(mention_pair[0].mention_id)
+                    mentions_to_encode.add(mention_pair[1].mention_id)
+
     m_num = 0
     for i, (topic_id, topic) in enumerate(dataset.topics.topics_dict.items()):
 
         for mention in tqdm(topic.mentions, desc=f"Encoding mentions of topic {topic_id} ({i}/{topic_num - 1})"):
             if mention.mention_id in encoded_mentions:
+                continue
+
+            if mention.mention_id not in mentions_to_encode:
                 continue
 
             hidden, first_token, last_token, mention_size = embed_model.get_mention_full_rep(mention)

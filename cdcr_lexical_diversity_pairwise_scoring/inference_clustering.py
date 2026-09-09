@@ -10,6 +10,7 @@ Options:
 """
 import json
 import pickle
+from datetime import datetime
 
 import pandas as pd
 import torch
@@ -20,6 +21,8 @@ from sklearn.cluster import AgglomerativeClustering
 from hydra.core.config_store import ConfigStore
 from typing import List
 from tqdm import tqdm
+
+
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.cluster import Clusters
@@ -33,9 +36,11 @@ from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_name, get_dataset_config_name, get_model_config_name, get_experiment_name
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet, EvalPairsType
 
-CONFIG_NAME = "preprocess_test"
+CONFIG_NAME = "preprocess_test_random"
 cs = ConfigStore.instance()
 cs.store(name=CONFIG_NAME, node=Config)
+
+torch.serialization.add_safe_globals([PairwiseModelKenton, torch.nn.modules.linear.Linear, torch.nn.modules.container.Sequential, torch.nn.modules.activation.ReLU, EmbedFromFile])
 
 agl_clust = AgglomerativeClustering(
         n_clusters=None,
@@ -50,7 +55,7 @@ def get_pairwise_model(
     embeddings_file_path: Path,
     use_cuda: bool = USE_CUDA,
 ):
-    pairwise_model = torch.load(model_file_path)
+    pairwise_model = torch.load(model_file_path, weights_only=True)
     pairwise_model.set_embed_utils(EmbedFromFile(embeddings_file_path))
 
     if use_cuda:
@@ -65,61 +70,77 @@ def predict_and_cluster(
     model: PairwiseModelKenton,
     experiment_name: str,
 ):
-    cached_file = f"predictions_{experiment_name}.pickle"
-    cached_path = PROJECT_ROOT / "resources" / cached_file
-    if cached_path.exists():
-        with open(cached_path, "rb") as file:
-            predictions = pickle.load(file)
-    else:
-        predictions = {}
+    # cached_file = f"predictions_{experiment_name}.pickle"
+    # cached_path = PROJECT_ROOT / "resources" / cached_file
+    # if cached_path.exists():
+    #     with open(cached_path, "rb") as file:
+    #         predictions = pickle.load(file)
+    # else:
+    #     predictions = {}
 
     # self.positive_pairs_eval_format[dataset][topic_id][pairs_type.value]
+    now_ = datetime.now()
+    save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_inference_time.csv'
+    inf_time_path = PROJECT_ROOT / "evaluation_results" / "output_files"/ save_filename
     experiment_results_dict = {}
+
+    inference_time_df = pd.DataFrame()
 
     for dataset, topic_dict in test_dataset.positive_pairs_eval_format.items():
         logger.info(f"Scoring dataset {dataset}")
         experiment_results_dict[dataset] = {}
 
         for topic_id, mention_config in tqdm(topic_dict.items(), desc=f"Scoring topics in {dataset}", total=len(topic_dict)):
-            mention_topic_dict = {m.mention_id: m for m in test_dataset.topics[topic_id].mentions}
+            mention_topic_dict = {m.mention_id: m for m in test_dataset.topics.topics_dict[topic_id].mentions}
             experiment_results_dict[dataset][topic_id] = {}
 
             for pairs_type in list(mention_config.keys()):
                 experiment_results_dict[dataset][topic_id][pairs_type] = []
 
-                all_pairs = test_dataset.positive_pairs_eval_format[pairs_type] + test_dataset.negative_pairs_eval_format[pairs_type]
+                all_pairs = test_dataset.positive_pairs_eval_format[dataset][topic_id][pairs_type] + test_dataset.negative_pairs_eval_format[dataset][topic_id][pairs_type]
                 key = f"{dataset}_{topic_id}_{pairs_type}"
-                if key in predictions:
-                    all_scores = predictions[key]
-                else:
-                    all_scores = score_mention_pairs(model, all_pairs)
-                    predictions[key] = all_scores
+                # if key in predictions:
+                #     all_scores = predictions[key]
+                # else:
+                start = datetime.now()
+                all_scores = score_mention_pairs(model, all_pairs)
+                # predictions[key] = all_scores
 
                 # correctly reshape mentions now
-                used_mention_ids = list(set(chain.from_iterable([[pair[0].mention_id, pair[0].mention_id] for pair in all_pairs])))
+                used_mention_ids = list(set(chain.from_iterable([[pair[0].mention_id, pair[1].mention_id] for pair in all_pairs])))
                 sim_df = pd.DataFrame(np.zeros((len(used_mention_ids), len(used_mention_ids))), index=used_mention_ids, columns=used_mention_ids)
                 for i, pair in enumerate(all_pairs):
                     sim_df.loc[pair[0].mention_id, pair[1].mention_id] = all_scores[i]
-                    sim_df.loc[pair[1].mention_id, pair[2].mention_id] = all_scores[i]
+                    sim_df.loc[pair[1].mention_id, pair[0].mention_id] = all_scores[i]
 
                 clustering = agl_clust.fit(sim_df.values)
                 true_clusters = [mention_topic_dict[m_id].coref_chain for m_id in used_mention_ids]
-                predicted_clusters = clustering.labels_
+                predicted_clusters = [str(v) for v in clustering.labels_]
+                end = datetime.now()
 
                 output_folder_true = PROJECT_ROOT / "evaluation_results" / "input_files" / experiment_name / dataset / pairs_type / topic_id
                 output_folder_true.mkdir(parents=True, exist_ok=True)
-                write_coref_scorer_results_simple(true_clusters, output_folder_true, topic_id, predictions=False)
-                write_coref_scorer_results_simple(predicted_clusters, output_folder_true, topic_id, predictions=True)
+                write_coref_scorer_results_simple(true_clusters, used_mention_ids, pairs_type, output_folder_true, dataset, topic_id, predictions=False)
+                write_coref_scorer_results_simple(predicted_clusters, used_mention_ids, pairs_type, output_folder_true, dataset, topic_id, predictions=True)
+                inference_time_df = pd.concat([inference_time_df, pd.DataFrame({
+                    "experiment": experiment_name,
+                    "dataset": dataset,
+                    "topic": topic_id,
+                    "pair_type": pairs_type,
+                    "mentions": len(used_mention_ids),
+                    "inference_time": (end-start).total_seconds()
+                }, index=[0])])
 
                 for i, m_id in enumerate(used_mention_ids):
                     m = mention_topic_dict[m_id]
-                    m_save = {k: v for k, v in dict(m.__dict__) if k in ["mention_id", "tokens_str", "coref_chain", "topic", "subtopic", "doc", "topic_id",  "subtopic_id", "doc_id", "dataset", "mention_context", "tokens_number_context"]}
+                    m_save = {k: v for k, v in dict(m.__dict__).items() if k in ["mention_id", "tokens_str", "coref_chain", "topic", "subtopic", "doc", "topic_id",  "subtopic_id", "doc_id", "dataset", "mention_context", "tokens_number_context"]}
                     m_save["predicted_coref_chain"] = f"{dataset}_{topic_id}_{predicted_clusters[i]}"
                     experiment_results_dict[dataset][topic_id][pairs_type].append(m_save)
 
-            with open(cached_file, "wb") as file:
-                pickle.dump(predictions, file)
-            logger.info(f"Cached predictions of topic {topic_id}")
+            # with open(cached_path, "wb") as file:
+            #     pickle.dump(predictions, file)
+            # logger.info(f"Cached predictions of topic {topic_id}")
+            inference_time_df.to_csv(inf_time_path)
 
     file_name = f"results_{experiment_name}.json"
     exp_dict_path = PROJECT_ROOT / "evaluation_results" / "clusters" / file_name
@@ -167,7 +188,7 @@ def main(config_name: str):
     with open(dataset_config["test"], "rb") as file:
         test_dataset = pickle.load(file)
 
-    logger.info(f"Running mention scoring with model: {model.__name__}")
+    logger.info(f"Running mention scoring with model: {type(model).__name__}")
     exp_name = get_experiment_name(config_name)
     predict_and_cluster(test_dataset=test_dataset, model=model, experiment_name=exp_name)
 

@@ -13,6 +13,7 @@ class PairwiseModelKenton(nn.Module):
         self.w_alpha = nn.Linear(f_hid_dim, 1)
         self.embed_utils = embed_utils
         self.use_cuda = use_cuda
+        self.__name__ = "PairwiseModelKenton"
 
     @staticmethod
     def get_sequential(ind, hidd):

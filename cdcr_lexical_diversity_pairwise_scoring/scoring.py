@@ -7,6 +7,7 @@ from datetime import datetime
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_name, get_dataset_config_name, get_model_config_name, get_experiment_name
+from helper_scripts.metrics import compute_metrics_from_assignments
 
 MUC = "_MUC"
 B3 = "_B3"
@@ -20,7 +21,40 @@ F1 = "F1"
 TRUE_LABEL, PRED_LABEL = "label_true", "label_pred"
 SPLIT = "split"
 
-CONFIG_NAME = "preprocess_test"
+_P_R_KEY_MAP = {
+    "muc_p": "muc_precision", "muc_r": "muc_recall",
+    "b3_p": "b3_precision", "b3_r": "b3_recall",
+    "ceafe_p": "ceafe_precision", "ceafe_r": "ceafe_recall",
+    "lea_p": "lea_precision", "lea_r": "lea_recall",
+    "pd_lea_p": "pd_lea_precision", "pd_lea_r": "pd_lea_recall",
+}
+
+
+CONFIG_NAME = "preprocess_test_random"
+
+def run_scorer_pythom_implementation(key_file_path: Path, response_file_path: Path):
+
+    true_labels = []
+    with open(key_file_path, "r", encoding="utf-8") as file:
+        for line in file:
+            if line.startswith("#"):
+                continue
+
+            label = line.split("\t")[-1].replace("(", "").replace(")", "")
+            true_labels.append(label)
+
+    pred_labels = []
+    with open(response_file_path, "r", encoding="utf-8") as file:
+        for line in file:
+            if line.startswith("#"):
+                continue
+
+            label = line.split("\t")[-1].replace("(", "").replace(")", "")
+            pred_labels.append(label)
+
+    result = compute_metrics_from_assignments(pred_labels, true_labels, pd_tuples=None)
+    return {_P_R_KEY_MAP.get(k, k): v for k, v in result.items()}
+
 
 def run_scorer(key_file_path: Path, response_file_path: Path):
     result_file = PROJECT_ROOT / "resources" / "conll_res.txt"
@@ -125,20 +159,23 @@ def main(config_name: str = None):
                         "topic": topic_path.name,
                         "mention_type": pair_type_path.name
                     }
-                    key_path = topic_path / "key.key_conll"
-                    response_path = topic_path / "response.response_conll"
-                    conll_f1_dict = run_scorer(key_file_path=key_path, response_file_path=response_path)
+                    key_path = topic_path / "key.conll"
+                    response_path = topic_path / "response.conll"
+                    # conll_f1_dict = run_scorer(key_file_path=key_path, response_file_path=response_path)
+
+                    conll_f1_dict = run_scorer_pythom_implementation(key_file_path=key_path, response_file_path=response_path)
                     summary_dict.update(conll_f1_dict)
                     pair_topic_df = pd.concat([pair_topic_df, pd.DataFrame(summary_dict, index=[f'{experiment}\\{dataset}\\{pair_type}\\{topic}'])], axis=0)
 
                 summary_df_subtopic = pd.concat([summary_df_subtopic, pair_topic_df])
-                summary_df = pd.concat([summary_df, pd.DataFrame(pair_topic_df.mean(), columns=[f'{experiment}\\{dataset}\\{pair_type}\\all']).T], axis=0)
+                summary_df = pd.concat([summary_df, pair_topic_df.drop(columns=["topic"]).groupby(by=["experiment", "dataset","mention_type"]).mean()], axis=0)
                 summary_df.to_csv(summary_folder / save_filename)
                 summary_df_subtopic.to_csv(summary_folder / save_filename_topics)
 
     summary_df.to_csv(summary_folder / save_filename)
-    save_filename_topics = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation_topics.csv'
+    # save_filename_topics = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation_topics.csv'
     summary_df_subtopic.to_csv(summary_folder / save_filename_topics)
+    logger.info(f'Scoring results are saved to {summary_folder}')
 
 
 if __name__ == '__main__':
