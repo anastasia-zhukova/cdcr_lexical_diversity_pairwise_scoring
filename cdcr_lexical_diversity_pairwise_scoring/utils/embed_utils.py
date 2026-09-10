@@ -8,7 +8,6 @@ from transformers import RobertaModel, RobertaTokenizer
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionuCDCR
-from cdcr_lexical_diversity_pairwise_scoring.constants import LANGUAGE_MODEL
 
 
 @dataclass
@@ -24,10 +23,10 @@ class TensorBuildOutput:
 class EmbedTransformersGenerics:
     def __init__(
         self,
+        bert_model_name: str,
         max_surrounding_context: int = -1,
         finetune: bool = False,
-        use_cuda: bool = True,
-        bert_model_name: str = LANGUAGE_MODEL,
+        use_cuda: bool = True
     ):
 
         self.max_surrounding_context = max_surrounding_context
@@ -97,14 +96,8 @@ class EmbedTransformersGenerics:
 
         mention_span = self.tokenizer.encode(" ".join(mention_span_str), add_special_tokens=False)
 
-        all_sentence_tokens = [
-            [self.tokenizer.cls_token_id]
-            + context_before
-            + mention_span
-            + context_after
-            + [self.tokenizer.sep_token_id],
-        ]
-        all_sentence_tokens = torch.tensor(all_sentence_tokens)
+        all_context_tokens = [[self.tokenizer.cls_token_id] + context_before + mention_span + context_after + [self.tokenizer.sep_token_id]]
+        all_context_tokens = torch.tensor(all_context_tokens)
         mention_start_index = len(context_before) + 1
         mention_end_index = len(context_before) + len(mention_span) + 1
         return all_context_tokens, mention_start_index, mention_end_index
@@ -115,8 +108,6 @@ class EmbedTransformersGenerics:
 
 
 class EmbedFromFile:
-    embed_size = 1024
-
     def __init__(
         self,
         files_to_load: Path | list[Path],
@@ -130,17 +121,22 @@ class EmbedFromFile:
         tensors = self._build_tensors_from_dict(bert_dict)
 
         self.mention_id_to_tensor_id_mapping = tensors.mention_id_to_tensor_id_mapping
-        self.hidden_vectors_long = tensors.hidden_vectors_long.cuda()
-        self.hidden_offsets_prefix_sums = tensors.hidden_offsets_prefix_sums.cuda()
-        self.first_tokens = tensors.first_tokens.cuda()
-        self.last_tokens = tensors.last_tokens.cuda()
-        self.sizes = tensors.sizes.cuda()
+
+        device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
+
+        self.hidden_vectors_long = tensors.hidden_vectors_long.to(device)
+        self.hidden_offsets_prefix_sums = tensors.hidden_offsets_prefix_sums.to(device)
+        self.first_tokens = tensors.first_tokens.to(device)
+        self.last_tokens = tensors.last_tokens.to(device)
+        self.sizes = tensors.sizes.to(device)
+        self.embed_size = list(bert_dict.values())[0][0].shape[1]
 
     def get_mentions_rep(
         self,
         tensor_ids: torch.Tensor,
         target_padding_size: int,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
         offsets_start = self.hidden_offsets_prefix_sums[tensor_ids]
         offsets_end = self.hidden_offsets_prefix_sums[tensor_ids + 1]
 
@@ -158,7 +154,7 @@ class EmbedFromFile:
 
     def get_mentions_metadata(
         self,
-        mentions_list: list[MentionData],
+        mentions_list: list[MentionuCDCR],
     ) -> tuple[torch.Tensor, torch.Tensor]:
         tensor_ids_required = torch.tensor(
             [self.mention_id_to_tensor_id_mapping[m.mention_id] for m in mentions_list],
@@ -184,6 +180,7 @@ class EmbedFromFile:
     def _load_prebuilt_bert_representation(
         files_to_load: list[Path],
     ) -> dict[str, tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]]:
+
         bert_dict: dict[str, tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]] = {}
 
         for single_file_path in files_to_load:

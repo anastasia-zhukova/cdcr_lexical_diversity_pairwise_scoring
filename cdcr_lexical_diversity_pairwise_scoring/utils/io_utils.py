@@ -3,26 +3,31 @@ import os
 from typing import Union, List
 from pathlib import Path
 
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData, MentionuCDCR
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, MentionPairStrategy, ScopeConfig
 
 
-def create_dataset_name(split: Split, type_of_pairs: MentionPairStrategy, scope: ScopeConfig, max_pairs: Union[int, None], ratio: int, dataset_components: List[str]):
-    return PROJECT_ROOT / "resources" / f"{split.value}_{type_of_pairs.value}_{scope.value}_{max_pairs}_{ratio}_{'-'.join(dataset_components)}.pickle"
+def create_dataset_save_path(split: Split, type_of_pairs: MentionPairStrategy, scope: ScopeConfig, max_pairs: Union[int, None], ratio: int, dataset_components: List[str]):
+    return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / f"{split.value}_{type_of_pairs.value}_{scope.value}_{max_pairs}_{ratio}_{'-'.join(dataset_components)}.pickle"
 
+def get_dataset_info_save_path():
+    return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "datasets.json"
 
-def get_dataset_config_name(config_name: str):
-    return config_name.split(".")[0].replace("preprocess", "datasets") + ".json"
+def get_model_info_save_path():
+    return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "model.json"
 
-def get_model_name(config_name: str):
-    return config_name.split(".")[0].replace("preprocess", "model")
+def get_conll_files_root_path():
+    return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "predictions_conll"
 
-def get_model_config_name(config_name: str):
-    return config_name.split(".")[0].replace("preprocess", "model") + ".json"
+def get_predicted_cluster_path():
+    return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "predictions_json" / "results.json"
 
-def get_experiment_name(config_name: str):
-    return config_name.split(".")[0].replace("preprocess_", "")
+def get_evaluation_result_path():
+    return PROJECT_ROOT / "evaluation_results"
+
+def get_encoding_cache_file(split: str, dataset: str, language_model: str):
+    return PROJECT_ROOT / "experiment_cache_results" / f"cached_{split}_{dataset}_{language_model}.pickle"
 
 
 def write_coref_scorer_results(

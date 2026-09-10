@@ -4,8 +4,8 @@ Usage:
 
 Options:
     -h --help       Show this screen.
-    --present=<x>   topic/cluster - (topic relevant only to ECB+) Visualize the mentions grouped by topic or clusters
-    --sample=<y>    Sample y clusters/topics to visualize [default: -1]
+    --present=<x>   topic/cluster - (topic relevant only to ECB+) Visualize the mentions grouped by topic or predictions_json
+    --sample=<y>    Sample y predictions_json/topics to visualize [default: -1]
 """
 
 import random

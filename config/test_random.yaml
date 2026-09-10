@@ -1,14 +1,12 @@
 dataset_folder: datasets/uCDCR
-setting: mix
-type_of_pairs: encoder
-ratio: 1
+setting: single
+type_of_pairs: random
+ratio: 10
 max_pairs_train: 8000
 train_scope: topic
 train_dataset_names:
-  - HyperCoref
   - ECBplus
 dev_dataset_names:
-  - HyperCoref
   - ECBplus
 dev_scope: subtopic
 dev_type_of_pairs: all
@@ -17,3 +15,12 @@ test_scope: subtopic
 test_dataset_names:
   - ECBplus
   - NewsWCL50
+language_model: roberta-base
+batch_size: 32
+learning_rate: 5e-5
+negative_positive_ratio: -1
+training_iterations: 10
+use_cuda: true
+fine_tune: false
+weight_decay: 0.01
+hidden_size: 150

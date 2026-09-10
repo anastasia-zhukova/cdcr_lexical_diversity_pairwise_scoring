@@ -1,1 +1,0 @@
-{"train": "C:\\Users\\annaz\\PycharmProjects\\LexCDCR\\resources\\train_encoder_topic_8000_HyperCoref-ECBplus.pickle", "val": "C:\\Users\\annaz\\PycharmProjects\\LexCDCR\\resources\\val_all_subtopic_1000_HyperCoref-ECBplus.pickle", "test": "C:\\Users\\annaz\\PycharmProjects\\LexCDCR\\resources\\test_all_subtopic_None_ECBplus-NewsWCL50.pickle"}

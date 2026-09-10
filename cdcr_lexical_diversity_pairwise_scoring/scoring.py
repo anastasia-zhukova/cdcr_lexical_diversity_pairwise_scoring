@@ -3,11 +3,13 @@ import numpy as np
 import subprocess
 import pandas as pd
 from datetime import datetime
+import hydra
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_name, get_dataset_config_name, get_model_config_name, get_experiment_name
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_info_save_path, get_conll_files_root_path, get_evaluation_result_path
 from helper_scripts.metrics import compute_metrics_from_assignments
+from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 
 MUC = "_MUC"
 B3 = "_B3"
@@ -29,8 +31,6 @@ _P_R_KEY_MAP = {
     "pd_lea_p": "pd_lea_precision", "pd_lea_r": "pd_lea_recall",
 }
 
-
-CONFIG_NAME = "preprocess_test_random"
 
 def run_scorer_pythom_implementation(key_file_path: Path, response_file_path: Path):
 
@@ -57,7 +57,7 @@ def run_scorer_pythom_implementation(key_file_path: Path, response_file_path: Pa
 
 
 def run_scorer(key_file_path: Path, response_file_path: Path):
-    result_file = PROJECT_ROOT / "resources" / "conll_res.txt"
+    result_file = PROJECT_ROOT / "experiment_cache_results" / "conll_res.txt"
 
     scorer_command = (f'perl {PROJECT_ROOT / "scorer" / "scorer.pl"} '
                       f'all {key_file_path} '
@@ -116,26 +116,26 @@ def run_scorer(key_file_path: Path, response_file_path: Path):
     return output_dict
 
 
-def main(config_name: str = None):
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
+def main(score_all_experiments: bool):
     """
     Computes CoNLL scores for the experiment that we want or for everything
     """
     now_ = datetime.now()
     save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation.csv'
     save_filename_topics = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation_topics.csv'
-    summary_folder = PROJECT_ROOT / "evaluation_results" / "output_files"
-    result_path = PROJECT_ROOT / "evaluation_results" / "input_files"
+    summary_folder = get_evaluation_result_path()
+    results_folder = PROJECT_ROOT / "experiment_cache_results"
 
-    if config_name is not None:
-        experiment_target = [get_experiment_name(config_name)]
+    if score_all_experiments:
+        experiment_target = [item.name for item in results_folder.iterdir() if item.is_dir()]
     else:
-        # score all files with experiments
-        experiment_target = [item.name for item in result_path.iterdir()]
+        experiment_target = [CONFIG_NAME]
 
     summary_df = pd.DataFrame()
     summary_df_subtopic = pd.DataFrame()
 
-    for experiment_path in result_path.iterdir():
+    for experiment_path in results_folder.iterdir():
         experiment = experiment_path.name
 
         if experiment not in experiment_target:
@@ -179,6 +179,4 @@ def main(config_name: str = None):
 
 
 if __name__ == '__main__':
-    # TODO Sergei fix reading the config names :) Here can be optional (None altenatively) if I want to run the scorer for all expriment data that I have
-    config_name = CONFIG_NAME
-    main(config_name)
+    main()

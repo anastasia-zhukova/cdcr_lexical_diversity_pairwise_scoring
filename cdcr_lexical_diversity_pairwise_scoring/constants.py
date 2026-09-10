@@ -4,10 +4,8 @@ from pathlib import Path
 # Path variables
 _current_file_path = Path(__file__).resolve()
 PROJECT_ROOT = _current_file_path.parent.parent
-LANGUAGE_MODEL = "roberta-base"
-CACHED_VECTOR_PATH = PROJECT_ROOT / "resources" / f"cached_{LANGUAGE_MODEL}.pickle"
 DEFAULT_RATIO = 20
-DEFAULT_TRAIN = 40000
+DEFAULT_TRAIN = 40000000
 DEFAULT_DEV = 8000
 SENT_TRANSFOMER = "intfloat/multilingual-e5-large-instruct"
 EMBEDDING =  "neuml/fasttext"
@@ -19,7 +17,7 @@ ALLOWED_TOPICS = {
 }
 MIN_STD = 0.03
 DENOM_DELTA = 4
-USE_CUDA = False
-MAX_ALLOWED_BATCH_SIZE = 20000
+MAX_ALLOWED_BATCH_SIZE = 200
 CLUSTERING_THRESHOLD = 0.5
 EXCLUDE_SINGLETONS = True
+CONFIG_NAME = "test_random"

@@ -20,15 +20,14 @@ from typing import List
 
 import hydra
 from hydra.core.config_store import ConfigStore
+from omegaconf import MISSING
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, DEFAULT_RATIO
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, DEFAULT_RATIO, CONFIG_NAME
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, uCDCRDataSet, MentionPairStrategy, DatasetSetting
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import ScopeConfig
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_dataset_name
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_dataset_save_path, get_dataset_info_save_path
 
-# TODO Sergei: fix the configs to be pluggable for each experiment
-CONFIG_NAME = "preprocess_test_random"
 
 @dataclass
 class Config:
@@ -45,6 +44,15 @@ class Config:
     max_pairs_dev: int
     test_scope: ScopeConfig
     test_dataset_names: List[str]
+    language_model: str
+    batch_size: int = MISSING
+    learning_rate: float = MISSING
+    negative_positive_ratio: int = MISSING
+    training_iterations: int = MISSING
+    use_cuda: bool = MISSING
+    fine_tune: bool = MISSING
+    weight_decay: float = MISSING
+    hidden_size: int = MISSING
 
 
 cs = ConfigStore.instance()
@@ -84,7 +92,7 @@ def main(config: Config) -> None:
             ratio = -1
             type_of_pairs = MentionPairStrategy.all
 
-        save_path = create_dataset_name(split, type_of_pairs, scope, max_pairs, ratio, dataset.dataset_components)
+        save_path = create_dataset_save_path(split, type_of_pairs, scope, max_pairs, ratio, dataset.dataset_components)
         if save_path.exists():
             logger.info(f"A dataset for {split.value} with the same config (path {str(save_path)}) already exists. Skipped.")
             dataset_dict[split.value] = str(save_path)
@@ -95,16 +103,13 @@ def main(config: Config) -> None:
         dataset_dict[split.value] = str(save_path)
 
     # save all paths to the created datasets for this experiment
-    # TODO Sergei: save the config into a yaml file
-    file_name = f'datasets_{"_".join(CONFIG_NAME.split("_")[1:])}.json'
-    with open(PROJECT_ROOT / "config" / file_name, "w", encoding="utf-8") as file:
+    save_path = get_dataset_info_save_path()
+    with open(save_path, "w", encoding="utf-8") as file:
         json.dump(dataset_dict, file)
 
-    logger.info(f"The paths to the created datasets for the current experiment config is saved in: {file_name}")
+    logger.info(f"The paths to the created datasets for the current experiment config is saved in: {save_path}")
 
 
 if __name__ == "__main__":
     # TODO Sergei: proper reading specific config to each experiment
-    # CONFIG_NAME = "preprocess_test"
-    # cs.store(name=CONFIG_NAME, node=Config)
     main()

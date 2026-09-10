@@ -111,7 +111,7 @@ def calc_single_head_lemma_cluster(ment_list, clus_size_thresh):
         else:
             diverse_clusts.append(head_set)
 
-    print("Single head lemma clusters=" + str(single_head_lemma_clust))
+    print("Single head lemma predictions_json=" + str(single_head_lemma_clust))
 
 
 def calc_dist_lemmas_cross(split_list):
@@ -139,8 +139,8 @@ def calc_dist_lemmas_cross(split_list):
     )
 
     print("Distinct Lemmas in corpus=" + str(len(distinct_lemmas)))
-    print("Distinct Lemmas across clusters=" + str(sum_cross_clust_lem))
-    print("Avg num of clusters with same Lemma(Ambiguity)=" + str(avg_cross_clust_lem))
+    print("Distinct Lemmas across predictions_json=" + str(sum_cross_clust_lem))
+    print("Avg num of predictions_json with same Lemma(Ambiguity)=" + str(avg_cross_clust_lem))
     print()
 
     count_verb_mentions(split_list)

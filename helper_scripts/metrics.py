@@ -10,7 +10,7 @@ Two high-level entry points are provided:
 
 * ``compute_metrics_from_clusters(pred_clusters, gold_clusters, …)``
     Takes pre-built cluster dicts (``id → set of mention indices``).
-    Used by ``eval_checkpoint.py`` where clusters are sliced from a DataFrame.
+    Used by ``eval_checkpoint.py`` where predictions_json are sliced from a DataFrame.
 
 * ``compute_metrics_from_assignments(cluster_ids, gold_labels, pd_tuples)``
     Takes 1-D arrays of predicted / gold cluster assignments and builds
@@ -50,7 +50,7 @@ def muc(clusters, mention_to_other):
     Parameters
     ----------
     clusters : list[set]
-        The clusters to score (predicted for precision, gold for recall).
+        The predictions_json to score (predicted for precision, gold for recall).
     mention_to_other : dict
         Mapping ``mention → set of mentions`` in the *other* partition
         (gold for precision, predicted for recall).
@@ -99,7 +99,7 @@ def ceafe(pred_list, gold_list):
 
     Uses the Hungarian algorithm (``scipy.optimize.linear_sum_assignment``)
     to find the optimal one-to-one matching between predicted and gold
-    clusters.
+    predictions_json.
 
     Returns
     -------
@@ -204,9 +204,9 @@ def compute_metrics_from_clusters(pred_clusters, gold_clusters,
     Parameters
     ----------
     pred_clusters : dict[int, set[int]]
-        Predicted clusters: cluster_id → set of mention indices.
+        Predicted predictions_json: cluster_id → set of mention indices.
     gold_clusters : dict[str, set[int]]
-        Gold clusters: chain_id → set of mention indices.
+        Gold predictions_json: chain_id → set of mention indices.
     pd_weight_fn : callable or None
         If provided, also compute pd_LEA using this weight function.
         If None, pd_LEA is omitted from the result.

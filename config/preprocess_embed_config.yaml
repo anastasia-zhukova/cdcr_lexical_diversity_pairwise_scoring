@@ -1,5 +1,0 @@
-file_1: resources/wec/Dev_Event_gold_mentions_validated.json
-file_2: resources/wec/Test_Event_gold_mentions_validated.json
-file_3: resources/wec/Train_Event_gold_mentions.json
-use_cuda: true
-max_context: 250

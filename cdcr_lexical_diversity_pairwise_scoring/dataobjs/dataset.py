@@ -312,7 +312,7 @@ class uCDCRDataSet(DataSet):
                 mentions_entity.extend(entity_mentions)
 
         self.topics.create_from_mention_list(mentions_event + mentions_entity, topic_scope=self.dataset_scope)
-        # generate clusters
+        # generate predictions_json
         self.topics.convert_to_clusters()
 
     def get_mix_pairs(self):
@@ -398,7 +398,7 @@ class uCDCRDataSet(DataSet):
         shuffled_clusters = dict(shuffled_topics)
         next_report_milestone = 0.1
 
-        # for topic_id, clusters in self.topics.topic_clusters.items():
+        # for topic_id, predictions_json in self.topics.topic_clusters.items():
         for topic_id, clusters in shuffled_clusters.items():
             dataset = self.topics.topics_to_datasets[topic_id]
             if used_up_n[dataset] >= positive_n_max:
@@ -589,7 +589,7 @@ class uCDCRDataSet(DataSet):
 
     def _encode_embeddings(self, topic_id: str)-> Tuple[pd.DataFrame, pd.DataFrame]:
         texts_dict, heads_dict = {}, {}
-        cached_path = PROJECT_ROOT / "resources" / f"{EMBEDDING.replace('/', '_')}.h5"
+        cached_path = PROJECT_ROOT / "experiment_cache_results" / f"{EMBEDDING.replace('/', '_')}.h5"
         if cached_path.exists():
             existing_embed_df = pd.read_hdf(cached_path, key="df")
         else:
@@ -655,7 +655,7 @@ class uCDCRDataSet(DataSet):
 
     def _encode_sentence_transformer(self, topic_id: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
         model = get_sent_transformer_model(SENT_TRANSFOMER)
-        cached_path = PROJECT_ROOT / "resources" / f"{SENT_TRANSFOMER.replace('/', '_')}.h5"
+        cached_path = PROJECT_ROOT / "experiment_cache_results" / f"{SENT_TRANSFOMER.replace('/', '_')}.h5"
         if cached_path.exists():
             existing_embed_df = pd.read_hdf(cached_path, key="df")
         else:
@@ -716,7 +716,7 @@ class uCDCRDataSet(DataSet):
 
         for c_id, mentions in shuffled_clusters.items():
             topic_mentions_dict = {}
-            # some clusters are cross-subtopic, so if the topic level is subtopic, we need to make sure that the positive pairs will be created on the level that we got from config
+            # some predictions_json are cross-subtopic, so if the topic level is subtopic, we need to make sure that the positive pairs will be created on the level that we got from config
             for m in mentions:
                 topic_id = self.topics.mention_to_topic[m.mention_id]
                 if topic_id not in topic_mentions_dict:

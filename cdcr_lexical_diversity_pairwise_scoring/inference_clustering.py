@@ -18,29 +18,23 @@ import numpy as np
 from pathlib import Path
 from itertools import chain
 from sklearn.cluster import AgglomerativeClustering
-from hydra.core.config_store import ConfigStore
 from typing import List
 from tqdm import tqdm
-
+import pathlib
+import hydra
+from hydra.core.config_store import ConfigStore
 
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.cluster import Clusters
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topics
-from cdcr_lexical_diversity_pairwise_scoring.utils.clustering_utils import agglomerative_clustering
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import write_coref_scorer_results, write_coref_scorer_results_simple
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
-from cdcr_lexical_diversity_pairwise_scoring.constants import MAX_ALLOWED_BATCH_SIZE, PROJECT_ROOT, CLUSTERING_THRESHOLD, CACHED_VECTOR_PATH, USE_CUDA
+from cdcr_lexical_diversity_pairwise_scoring.constants import MAX_ALLOWED_BATCH_SIZE, PROJECT_ROOT, CLUSTERING_THRESHOLD, CONFIG_NAME
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_name, get_dataset_config_name, get_model_config_name, get_experiment_name
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file, get_predicted_cluster_path, get_conll_files_root_path
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet, EvalPairsType
 
-CONFIG_NAME = "preprocess_test_random"
-cs = ConfigStore.instance()
-cs.store(name=CONFIG_NAME, node=Config)
-
-torch.serialization.add_safe_globals([PairwiseModelKenton, torch.nn.modules.linear.Linear, torch.nn.modules.container.Sequential, torch.nn.modules.activation.ReLU, EmbedFromFile])
+torch.serialization.add_safe_globals([PairwiseModelKenton, torch.nn.modules.linear.Linear, torch.nn.modules.container.Sequential, torch.nn.modules.activation.ReLU, EmbedFromFile, pathlib.WindowsPath])
 
 agl_clust = AgglomerativeClustering(
         n_clusters=None,
@@ -52,11 +46,11 @@ agl_clust = AgglomerativeClustering(
 
 def get_pairwise_model(
     model_file_path: Path,
-    embeddings_file_path: Path,
-    use_cuda: bool = USE_CUDA,
+    embeddings_file_paths: list[Path],
+    use_cuda: bool
 ):
     pairwise_model = torch.load(model_file_path, weights_only=True)
-    pairwise_model.set_embed_utils(EmbedFromFile(embeddings_file_path))
+    pairwise_model.set_embed_utils(EmbedFromFile(embeddings_file_paths, use_cuda))
 
     if use_cuda:
         pairwise_model.cuda()
@@ -71,7 +65,7 @@ def predict_and_cluster(
     experiment_name: str,
 ):
     # cached_file = f"predictions_{experiment_name}.pickle"
-    # cached_path = PROJECT_ROOT / "resources" / cached_file
+    # cached_path = PROJECT_ROOT / "experiment_cache_results" / cached_file
     # if cached_path.exists():
     #     with open(cached_path, "rb") as file:
     #         predictions = pickle.load(file)
@@ -86,6 +80,8 @@ def predict_and_cluster(
 
     inference_time_df = pd.DataFrame()
 
+    conll_path = get_conll_files_root_path()
+
     for dataset, topic_dict in test_dataset.positive_pairs_eval_format.items():
         logger.info(f"Scoring dataset {dataset}")
         experiment_results_dict[dataset] = {}
@@ -98,7 +94,7 @@ def predict_and_cluster(
                 experiment_results_dict[dataset][topic_id][pairs_type] = []
 
                 all_pairs = test_dataset.positive_pairs_eval_format[dataset][topic_id][pairs_type] + test_dataset.negative_pairs_eval_format[dataset][topic_id][pairs_type]
-                key = f"{dataset}_{topic_id}_{pairs_type}"
+                # key = f"{dataset}_{topic_id}_{pairs_type}"
                 # if key in predictions:
                 #     all_scores = predictions[key]
                 # else:
@@ -118,7 +114,7 @@ def predict_and_cluster(
                 predicted_clusters = [str(v) for v in clustering.labels_]
                 end = datetime.now()
 
-                output_folder_true = PROJECT_ROOT / "evaluation_results" / "input_files" / experiment_name / dataset / pairs_type / topic_id
+                output_folder_true = conll_path / dataset / pairs_type / topic_id
                 output_folder_true.mkdir(parents=True, exist_ok=True)
                 write_coref_scorer_results_simple(true_clusters, used_mention_ids, pairs_type, output_folder_true, dataset, topic_id, predictions=False)
                 write_coref_scorer_results_simple(predicted_clusters, used_mention_ids, pairs_type, output_folder_true, dataset, topic_id, predictions=True)
@@ -142,13 +138,12 @@ def predict_and_cluster(
             # logger.info(f"Cached predictions of topic {topic_id}")
             inference_time_df.to_csv(inf_time_path)
 
-    file_name = f"results_{experiment_name}.json"
-    exp_dict_path = PROJECT_ROOT / "evaluation_results" / "clusters" / file_name
+    exp_dict_path = get_predicted_cluster_path()
     with exp_dict_path.open("w") as file:
         json.dump(experiment_results_dict, file)
 
-    logger.info(f"The files for the CoNLL scorer are saved into: {PROJECT_ROOT / 'evaluation_results' / 'input_files' / experiment_name}.")
-    logger.info(f"The files with true and predicted clusters are saved into: {exp_dict_path}.")
+    logger.info(f"The files for the CoNLL scorer are saved into: {conll_path}.")
+    logger.info(f"The files with true and predicted predictions_json are saved into: {exp_dict_path}.")
 
 
 def score_mention_pairs(model: PairwiseModelKenton, all_pairs: list) -> List[float]:
@@ -169,32 +164,29 @@ def score_mention_pairs(model: PairwiseModelKenton, all_pairs: list) -> List[flo
     return predictions.tolist()
 
 
-def main(config_name: str):
-    model_config_name = get_model_config_name(config_name)
-    model_config_path = PROJECT_ROOT / "config" / model_config_name
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
+def main(config: Config):
+    model_config_path = get_model_info_save_path()
     with open(model_config_path, "r") as file:
         model_config = json.load(file)
 
-    file_name = get_dataset_config_name(config_name)
-    dataset_file_path = PROJECT_ROOT / "config" / file_name
+    dataset_file_path = get_dataset_info_save_path()
     with open(dataset_file_path, "r") as file:
         dataset_config = json.load(file)
-
-    model = get_pairwise_model(
-        model_file_path=model_config["model"],
-        embeddings_file_path=CACHED_VECTOR_PATH,
-    )
 
     with open(dataset_config["test"], "rb") as file:
         test_dataset = pickle.load(file)
 
+    cached_embeddings_paths = [get_encoding_cache_file("test", dataset_name, config.language_model) for dataset_name in test_dataset.dataset_components]
+    model = get_pairwise_model(
+        model_file_path=model_config["model"],
+        embeddings_file_paths=cached_embeddings_paths,
+        use_cuda=config.use_cuda
+    )
+
     logger.info(f"Running mention scoring with model: {type(model).__name__}")
-    exp_name = get_experiment_name(config_name)
-    predict_and_cluster(test_dataset=test_dataset, model=model, experiment_name=exp_name)
+    predict_and_cluster(test_dataset=test_dataset, model=model, experiment_name=CONFIG_NAME)
 
 
 if __name__ == "__main__":
-    # arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
-    # TODO Sergei read experiment config file
-    config_file = CONFIG_NAME
-    main(config_file)
+    main()
