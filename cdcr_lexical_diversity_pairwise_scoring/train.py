@@ -237,7 +237,8 @@ def main(config: Config):
         + ", weight_decay="
         + str(config.weight_decay),
     )
-    
+
+    start = datetime.now()
     eval_res, best_model_path = train_pairwise(
         _pairwise_model,
         _event_train_feat,
@@ -248,7 +249,8 @@ def main(config: Config):
         model_out=_model_file,
         weight_decay=config.weight_decay,
     )
-    run_results = {"eval_dev": eval_res, "model": str(best_model_path)}
+    end = datetime.now()
+    run_results = {"eval_dev": eval_res, "model": str(best_model_path), "total_train_time": (end-start).total_seconds()}
 
     model_config_path = get_model_info_save_path()
     with open(model_config_path, "w", encoding="utf-8") as file:
