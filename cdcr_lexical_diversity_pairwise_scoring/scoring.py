@@ -7,7 +7,7 @@ import hydra
 import json
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME, SCORE_ALL_EXPERIMENTS
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_info_save_path, get_conll_files_root_path, get_evaluation_result_path
 from helper_scripts.metrics import compute_metrics_from_assignments
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
@@ -118,7 +118,7 @@ def run_scorer(key_file_path: Path, response_file_path: Path):
 
 
 @hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
-def main(score_all_experiments: bool = False):
+def main(config: Config):
     """
     Computes CoNLL scores for the experiment that we want or for everything
     """
@@ -128,7 +128,7 @@ def main(score_all_experiments: bool = False):
     summary_folder = get_evaluation_result_path()
     results_folder = PROJECT_ROOT / "experiment_cache_results"
 
-    if score_all_experiments:
+    if SCORE_ALL_EXPERIMENTS:
         experiment_target = [item.name for item in results_folder.iterdir() if item.is_dir()]
     else:
         experiment_target = [CONFIG_NAME]

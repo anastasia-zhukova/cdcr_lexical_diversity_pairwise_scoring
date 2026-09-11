@@ -187,7 +187,7 @@ class EmbedFromFile:
             with single_file_path.open("rb") as file:
                 loaded_file = pickle.load(file)
                 bert_dict.update(loaded_file)
-            logger.info(f"Bert representation loaded from file: {single_file_path}")
+            logger.info(f"BERT representation loaded from file: {single_file_path}")
 
         return bert_dict
 

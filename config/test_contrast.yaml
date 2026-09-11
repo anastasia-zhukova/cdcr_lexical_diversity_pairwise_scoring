@@ -1,0 +1,25 @@
+dataset_folder: datasets/uCDCR
+setting: single
+type_of_pairs: encoder
+ratio: 10
+max_pairs_train: 8000
+train_scope: topic
+train_dataset_names:
+  - ECBplus
+dev_dataset_names:
+  - ECBplus
+dev_scope: subtopic
+dev_type_of_pairs: all
+max_pairs_dev: 1000
+test_scope: subtopic
+test_dataset_names:
+  - ECBplus
+  - NewsWCL50
+language_model: roberta-base
+batch_size: 32
+learning_rate: 5e-5
+training_iterations: 10
+use_cuda: false
+fine_tune: false
+weight_decay: 0.01
+hidden_size: 150

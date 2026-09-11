@@ -21,6 +21,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topic, ScopeConfig, Topics
 from cdcr_lexical_diversity_pairwise_scoring.constants import *
 
+import warnings
+warnings.filterwarnings("ignore")
 random.seed(42)
 nltk.download("stopwords")
 HF_HUB_DISABLE_SYMLINKS_WARNING = True
@@ -382,11 +384,11 @@ class uCDCRDataSet(DataSet):
 
         # compute max per dataset component
         if self.ratio > -1:
-            positive_n_max = self.max_pairs // (1 + self.ratio) // len(self.dataset_components)
+            positive_n_max_dataset = self.max_pairs // (1 + self.ratio) // len(self.dataset_components)
             ratio = self.ratio
         else:
             # make a default ratio 20 as in SOTA
-            positive_n_max = self.max_pairs // (1 + DEFAULT_RATIO) // len(self.dataset_components)
+            positive_n_max_dataset = self.max_pairs // (1 + DEFAULT_RATIO) // len(self.dataset_components)
             ratio = DEFAULT_RATIO
 
         used_up_n = {d: 0 for d in self.dataset_components}
@@ -401,14 +403,14 @@ class uCDCRDataSet(DataSet):
         # for topic_id, predictions_json in self.topics.topic_clusters.items():
         for topic_id, clusters in shuffled_clusters.items():
             dataset = self.topics.topics_to_datasets[topic_id]
-            if used_up_n[dataset] >= positive_n_max:
+            if used_up_n[dataset] >= positive_n_max_dataset:
                 continue
 
             shuffled_clusters = list(clusters.items())
             random.shuffle(shuffled_clusters)
             shuffled_clusters = dict(shuffled_clusters)
 
-            logger.info(f"Encoding topic {topic_id}.")
+            logger.info(f"Encoding topic {topic_id} of {dataset}.")
             topic_embed_df, sim_df = self.encode_mentions(topic_id)
             mentions_topic_dict = {m.mention_id: m for m in self.topics.topics_dict[topic_id].mentions}
 
@@ -417,7 +419,7 @@ class uCDCRDataSet(DataSet):
                     # exclude singletons from being target mentions
                     continue
 
-                if used_up_n[dataset] >= positive_n_max:
+                if used_up_n[dataset] >= positive_n_max_dataset:
                     break
 
                 # compute the threshold
@@ -512,10 +514,14 @@ class uCDCRDataSet(DataSet):
                         all_mention_pairs[dataset][c_id]["neg_hard"].update(set(hard_negative_pairs))
                         all_mention_pairs[dataset][c_id]["neg_easy"].update(set(uCDCRDataSet._make_pairs_with_target(target_mention_id, neg_easy, mentions_topic_dict, max_num=num_pairs_per_neg_type - len(hard_negative_pairs))))
 
-                used_up_n[dataset] += len(all_mention_pairs[dataset][c_id]["pos_easy"]) + len(all_mention_pairs[dataset][c_id]["pos_hard"])
-                if used_up_n[dataset] / positive_n_max >= next_report_milestone:
-                    logger.info(f"Collected at least {next_report_milestone * 100}% of the {positive_n_max} positive pairs for {dataset}.")
-                    next_report_milestone += 0.1
+                if c_id in all_mention_pairs[dataset]:
+                    used_up_n[dataset] += len(all_mention_pairs[dataset][c_id]["pos_easy"]) + len(all_mention_pairs[dataset][c_id]["pos_hard"])
+                    if used_up_n[dataset] / positive_n_max_dataset >= next_report_milestone:
+                        logger.info(f"Collected at least {used_up_n[dataset]} of the {positive_n_max_dataset} positive pairs for {dataset} (negative ratio 1:{ratio}). Last topic {topic_id}.")
+                        next_report_milestone += 0.1
+
+            logger.info(
+                f"Collected at least {used_up_n[dataset]} of the {positive_n_max_dataset} positive pairs for {dataset} (negative ratio 1:{ratio}). Last topic {topic_id}.")
 
         self.total_types = {}
         for dataset, clusters_per_dataset in all_mention_pairs.items():
@@ -526,6 +532,13 @@ class uCDCRDataSet(DataSet):
 
                 self.positive_pairs.extend(list(pair_types["pos_easy"]) + list(pair_types["pos_hard"]))
                 self.negative_pairs.extend(list(pair_types["neg_easy"]) + list(pair_types["neg_hard"]))
+
+        if len(self.positive_pairs) > positive_n_max_dataset * len(self.dataset_components):
+            self.positive_pairs = random.sample(self.positive_pairs, positive_n_max_dataset * len(self.dataset_components))
+
+        if len(self.negative_pairs) > positive_n_max_dataset * ratio * len(self.dataset_components):
+            self.negative_pairs = random.sample(self.negative_pairs, positive_n_max_dataset * ratio * len(self.dataset_components))
+        logger.info(f"Collected {len(self.positive_pairs)} positive and {len(self.negative_pairs)} negative contrastive pairs.")
 
 
     @classmethod
