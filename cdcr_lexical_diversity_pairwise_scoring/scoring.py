@@ -4,6 +4,7 @@ import subprocess
 import pandas as pd
 from datetime import datetime
 import hydra
+import json
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME
@@ -117,7 +118,7 @@ def run_scorer(key_file_path: Path, response_file_path: Path):
 
 
 @hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
-def main(score_all_experiments: bool):
+def main(score_all_experiments: bool = False):
     """
     Computes CoNLL scores for the experiment that we want or for everything
     """
@@ -143,7 +144,9 @@ def main(score_all_experiments: bool):
 
         logger.info(f"Scoring experiment {experiment}")
 
-        for dataset_path in experiment_path.iterdir():
+        conll_path = get_conll_files_root_path(experiment)
+
+        for dataset_path in conll_path.iterdir():
             dataset = dataset_path.name
 
             for pair_type_path in dataset_path.iterdir():

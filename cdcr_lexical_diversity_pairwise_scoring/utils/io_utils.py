@@ -17,8 +17,8 @@ def get_dataset_info_save_path():
 def get_model_info_save_path():
     return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "model.json"
 
-def get_conll_files_root_path():
-    return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "predictions_conll"
+def get_conll_files_root_path(experiment_name: str = CONFIG_NAME):
+    return PROJECT_ROOT / "experiment_cache_results" / experiment_name / "predictions_conll"
 
 def get_predicted_cluster_path():
     return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "predictions_json" / "results.json"

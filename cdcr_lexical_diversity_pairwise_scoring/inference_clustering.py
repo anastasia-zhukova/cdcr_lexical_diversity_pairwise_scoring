@@ -31,7 +31,7 @@ from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromF
 from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
 from cdcr_lexical_diversity_pairwise_scoring.constants import MAX_ALLOWED_BATCH_SIZE, PROJECT_ROOT, CLUSTERING_THRESHOLD, CONFIG_NAME
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file, get_predicted_cluster_path, get_conll_files_root_path
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file, get_predicted_cluster_path, get_conll_files_root_path, get_evaluation_result_path
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet, EvalPairsType
 
 torch.serialization.add_safe_globals([PairwiseModelKenton, torch.nn.modules.linear.Linear, torch.nn.modules.container.Sequential, torch.nn.modules.activation.ReLU, EmbedFromFile, pathlib.WindowsPath])
@@ -63,6 +63,7 @@ def predict_and_cluster(
     test_dataset: uCDCRDataSet,
     model: PairwiseModelKenton,
     experiment_name: str,
+    evaluation_level: str = "subtopic"
 ):
     # cached_file = f"predictions_{experiment_name}.pickle"
     # cached_path = PROJECT_ROOT / "experiment_cache_results" / cached_file
@@ -75,7 +76,7 @@ def predict_and_cluster(
     # self.positive_pairs_eval_format[dataset][topic_id][pairs_type.value]
     now_ = datetime.now()
     save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_inference_time.csv'
-    inf_time_path = PROJECT_ROOT / "evaluation_results" / "output_files"/ save_filename
+    inf_time_path = get_evaluation_result_path() / save_filename
     experiment_results_dict = {}
 
     inference_time_df = pd.DataFrame()
@@ -86,7 +87,7 @@ def predict_and_cluster(
         logger.info(f"Scoring dataset {dataset}")
         experiment_results_dict[dataset] = {}
 
-        for topic_id, mention_config in tqdm(topic_dict.items(), desc=f"Scoring topics in {dataset}", total=len(topic_dict)):
+        for topic_id, mention_config in tqdm(topic_dict.items(), desc=f"Scoring {evaluation_level}s in {dataset}", total=len(topic_dict)):
             mention_topic_dict = {m.mention_id: m for m in test_dataset.topics.topics_dict[topic_id].mentions}
             experiment_results_dict[dataset][topic_id] = {}
 
@@ -185,7 +186,7 @@ def main(config: Config):
     )
 
     logger.info(f"Running mention scoring with model: {type(model).__name__}")
-    predict_and_cluster(test_dataset=test_dataset, model=model, experiment_name=CONFIG_NAME)
+    predict_and_cluster(test_dataset=test_dataset, model=model, experiment_name=CONFIG_NAME, evaluation_level=config.test_scope)
 
 
 if __name__ == "__main__":

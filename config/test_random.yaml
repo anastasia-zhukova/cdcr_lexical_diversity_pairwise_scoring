@@ -18,9 +18,8 @@ test_dataset_names:
 language_model: roberta-base
 batch_size: 32
 learning_rate: 5e-5
-negative_positive_ratio: -1
 training_iterations: 10
-use_cuda: true
+use_cuda: false
 fine_tune: false
 weight_decay: 0.01
 hidden_size: 150

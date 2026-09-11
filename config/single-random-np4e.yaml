@@ -5,9 +5,9 @@ ratio: 10
 max_pairs_train: 50000000
 train_scope: subtopic
 train_dataset_names:
-  - MEANTIME
+  - NP4E
 dev_dataset_names:
-  - MEANTIME
+  - NP4E
 dev_scope: subtopic
 dev_type_of_pairs: all
 max_pairs_dev: none
@@ -25,3 +25,11 @@ test_dataset_names:
   - NiDENT
   - NP4E
   - WECEng
+language_model: roberta-large
+batch_size: 256
+learning_rate: 5e-5
+training_iterations: 25
+use_cuda: true
+fine_tune: false
+weight_decay: 0.01
+hidden_size: 1024

@@ -47,7 +47,6 @@ class Config:
     language_model: str
     batch_size: int = MISSING
     learning_rate: float = MISSING
-    negative_positive_ratio: int = MISSING
     training_iterations: int = MISSING
     use_cuda: bool = MISSING
     fine_tune: bool = MISSING

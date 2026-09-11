@@ -211,7 +211,7 @@ def main(config: Config):
         + "_bs_"
         + str(config.batch_size)
         + "_r"
-        + str(config.negative_positive_ratio)
+        + str(config.ratio)
         + "_itr"
         + str(config.training_iterations)
     )
@@ -229,7 +229,7 @@ def main(config: Config):
         + ", bs="
         + str(config.batch_size)
         + ", ratio=1:"
-        + str(config.negative_positive_ratio)
+        + str(config.ratio)
         + ", itr="
         + str(config.training_iterations)
         + ", hidden_s="

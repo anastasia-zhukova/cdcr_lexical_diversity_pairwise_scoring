@@ -18,9 +18,11 @@ from pathlib import Path
 from tqdm import tqdm
 import hydra
 import torch
+from datetime import datetime
+import pandas as pd
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_encoding_cache_file
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_encoding_cache_file, get_evaluation_result_path
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedTransformersGenerics
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME
@@ -31,6 +33,10 @@ random.seed(0)
 
 
 def encode_dataset_mentions(dataset: uCDCRDataSet, split: str, embed_model: EmbedTransformersGenerics, config: Config):
+    now_ = datetime.now()
+    save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_inference_time.csv'
+    inf_time_path = get_evaluation_result_path() / save_filename
+    inference_time_df = pd.DataFrame()
 
     device = torch.device("cuda" if torch.cuda.is_available() and config.use_cuda else "cpu")
     topic_num = len(dataset.topics.topics_dict)
@@ -50,6 +56,7 @@ def encode_dataset_mentions(dataset: uCDCRDataSet, split: str, embed_model: Embe
 
     encoded_mentions = {}
     cached_vector_path = None
+    start = datetime.now()
 
     for i, (topic_id, dataset_name) in enumerate(dataset.topics.topics_to_datasets.items()):
         cached_vector_path_next = get_encoding_cache_file(split, dataset_name, config.language_model)
@@ -63,6 +70,7 @@ def encode_dataset_mentions(dataset: uCDCRDataSet, split: str, embed_model: Embe
         cached_vector_path = cached_vector_path_next
         topic = dataset.topics.topics_dict[topic_id]
 
+        added_mentions = False
         for mention in tqdm(topic.mentions, desc=f"Encoding mentions of topic {topic_id} ({i}/{topic_num - 1})"):
             if mention.mention_id in encoded_mentions:
                 continue
@@ -70,11 +78,27 @@ def encode_dataset_mentions(dataset: uCDCRDataSet, split: str, embed_model: Embe
             if mention.mention_id not in mentions_to_encode:
                 continue
 
+            added_mentions = True
             hidden, first_token, last_token, mention_size = embed_model.get_mention_full_rep(mention)
             encoded_mentions[mention.mention_id] = (hidden.to(device), first_token.to(device), last_token.to(device), mention_size)
 
+        if added_mentions:
             with cached_vector_path.open("wb") as file:
                 pickle.dump(encoded_mentions, file)
+
+            #  track time took for the encoding
+            end = datetime.now()
+            if split == "test":
+                inference_time_df = pd.concat([inference_time_df, pd.DataFrame({
+                    "experiment": CONFIG_NAME,
+                    "dataset": dataset_name,
+                    "topic": topic_id,
+                    "pair_type": "encoding",
+                    "mentions": len(topic.mentions),
+                    "inference_time": (end-start).total_seconds()
+                }, index=[0])])
+                inference_time_df.to_csv(inf_time_path)
+            start = datetime.now()
 
 
 def encode_dataset(
