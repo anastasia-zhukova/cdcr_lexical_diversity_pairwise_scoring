@@ -17,6 +17,16 @@ Specifically we used the following news datasets:
 - Python 3.12
 - TODO Sergei
 
+### Experiment tracking (MLflow)
+Runs are tracked in MLflow when a tracking server is configured. Copy `.env.example` to `.env` and fill in
+`MLFLOW_TRACKING_URI`, `MLFLOW_TRACKING_USERNAME`, `MLFLOW_TRACKING_PASSWORD` and (optionally) `MLFLOW_EXPERIMENT_NAME`.
+Leaving `MLFLOW_TRACKING_URI` empty disables tracking; the pipeline behaves exactly as before.
+
+One MLflow run corresponds to one experiment config and is named after it (e.g. `single-random-cd2cr`):
+`train.py` opens it (params, per-epoch loss and dev metrics, training time), `inference_clustering.py` attaches
+the inference outputs and `scoring.py` the CoNLL scores per dataset. See
+`cdcr_lexical_diversity_pairwise_scoring/tracking/README.md` for the details.
+
 To automatically download the uCDCR dataset, use the following script: TODO AZ
 ```
 python setup.py
