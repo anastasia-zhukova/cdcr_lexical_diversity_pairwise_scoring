@@ -10,7 +10,7 @@ dev_dataset_names:
   - ECBplus
 dev_scope: subtopic
 dev_type_of_pairs: all
-max_pairs_dev: none
+max_pairs_dev: null
 test_scope: subtopic
 test_dataset_names:
   - CEREC
