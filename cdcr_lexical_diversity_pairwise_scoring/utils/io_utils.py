@@ -11,7 +11,7 @@ from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, Ment
 def create_dataset_save_path(split: Split, type_of_pairs: MentionPairStrategy, scope: ScopeConfig, max_pairs: Union[int, None], ratio: int, dataset_components: List[str]):
     folder = PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME
     Path.mkdir(folder, exist_ok=True)
-    return folder / f"{split.value}_{type_of_pairs.value}_{scope.value}_{max_pairs}_{ratio}_{'-'.join(dataset_components)}.pickle"
+    return folder / f"{split}_{type_of_pairs}_{scope}_{max_pairs}_{ratio}_{'-'.join(dataset_components)}.pickle"
 
 def get_dataset_info_save_path():
     return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "datasets.json"

@@ -5,7 +5,6 @@ from pathlib import Path
 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData, MentionuCDCR
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -58,7 +57,6 @@ class Topics:
         self.topics_dict = self.order_mentions_by_topics(mentions)
         self.convert_to_clusters()
 
-
     def create_from_mention_list(self, mentions, topic_scope: ScopeConfig):
         mentions_class_list = MentionuCDCR.read_mentions(mentions)
         if topic_scope == ScopeConfig.corpus:
@@ -81,8 +79,9 @@ class Topics:
                 self.topics_to_datasets[topic_id] = m.dataset
                 self.mention_to_topic[m.mention_id] = topic_id
         logger.info(f"Dataset contains {len(mentions_class_list)} mentions.")
-        logger.info(f"Dataset contains {len(self.topics_dict)} topics (defined by the {topic_scope.value} scope from the config).")
-
+        logger.info(
+            f"Dataset contains {len(self.topics_dict)} topics (defined by the {topic_scope} scope from the config)."
+        )
 
     def order_mentions_by_topics(self, mentions: list[dict]) -> dict[str, Topic]:
         """Order mentions to documents topics

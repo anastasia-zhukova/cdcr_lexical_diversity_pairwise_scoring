@@ -850,7 +850,7 @@ class uCDCRDataSet(DataSet):
         """
         positive_counter_datasets, used_topics = self.create_all_pairs()
         ratio = self.ratio if self.ratio > -1 else DEFAULT_RATIO
-        negative_counter_datasets = {d: ratio * pos for d, pos in positive_counter_datasets}
+        negative_counter_datasets = {d: ratio * pos for d, pos in positive_counter_datasets.items()}
         self._create_capped_negatives(negative_counter_datasets, used_topics, ratio, same_mention_type)
 
 
