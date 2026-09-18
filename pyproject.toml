@@ -84,6 +84,10 @@ ignore = [
 fixable = ["ALL"]
 unfixable = ["F841"]
 
+[tool.ruff.lint.per-file-ignores]
+# The no-op tracker implements the tracker contract without using its arguments.
+"cdcr_lexical_diversity_pairwise_scoring/tracking/mlflow_tracker.py" = ["ARG002"]
+
 [tool.ruff.lint.mccabe]
 max-complexity = 10
 

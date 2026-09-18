@@ -17,7 +17,6 @@ from cdcr_lexical_diversity_pairwise_scoring.constants import (
 )
 from cdcr_lexical_diversity_pairwise_scoring.tracking.run_context import RunContext
 
-
 # Both logging systems of the project (loguru in the scripts, stdlib logging in `dataobjs`)
 # are captured into one file, so the format has to be applied at the stdlib handler level.
 _CAPTURED_LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(message)s"
@@ -90,7 +89,9 @@ class NoOpTracker(ExperimentTracker):
         context: RunContext,
         run_id: str | None,
     ) -> Iterator[str | None]:
-        logger.warning(f"MLflow tracking is disabled (no MLFLOW_TRACKING_URI). Run '{context.run_name}' is not tracked.")
+        logger.warning(
+            f"MLflow tracking is disabled (no MLFLOW_TRACKING_URI). Run '{context.run_name}' is not tracked.",
+        )
         yield None
 
     def log_params(self, params: dict[str, Any]) -> None:
@@ -158,16 +159,14 @@ class MLflowTracker(ExperimentTracker):
 
         # A resumed run keeps its own name, tags and params: the context describes the current
         # job, which may be scoring the results of a different experiment config.
-        if resumed:
-            run_arguments = {"run_id": run_id}
-        else:
-            run_arguments = {"run_name": context.run_name, "tags": context.tags}
+        run_arguments = {"run_id": run_id} if resumed else {"run_name": context.run_name, "tags": context.tags}
 
         with mlflow.start_run(**run_arguments) as active_run:
             self._run_id = active_run.info.run_id
 
             with self._capture_logs():
-                logger.info(f"{'Resumed' if resumed else 'Started'} MLflow run '{context.run_name}' (run_id={self._run_id}).")
+                action = "Resumed" if resumed else "Started"
+                logger.info(f"{action} MLflow run '{context.run_name}' (run_id={self._run_id}).")
 
                 if not resumed:
                     mlflow.log_params(context.params)
