@@ -4,7 +4,6 @@ from typing import Any, Self
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 
-
 # Config fields worth filtering runs by in the MLflow UI
 _TAGGED_CONFIG_FIELDS = ("setting", "type_of_pairs", "train_scope", "language_model")
 _LIST_TAG_SEPARATOR = "-"

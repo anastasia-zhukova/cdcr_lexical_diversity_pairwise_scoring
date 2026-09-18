@@ -31,14 +31,18 @@ def fake_mlflow(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(mlflow_tracker.mlflow, "set_tracking_uri", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(mlflow_tracker.mlflow, "set_experiment", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(mlflow_tracker.mlflow, "start_run", fake_start_run)
-    monkeypatch.setattr(mlflow_tracker.mlflow, "log_params", lambda params: recorded["params"].append(params))
-    monkeypatch.setattr(mlflow_tracker.mlflow, "log_metrics", lambda metrics, step=None: recorded["metrics"].append((metrics, step)))
+    monkeypatch.setattr(mlflow_tracker.mlflow, "log_params", recorded["params"].append)
+    monkeypatch.setattr(
+        mlflow_tracker.mlflow,
+        "log_metrics",
+        lambda metrics, step=None: recorded["metrics"].append((metrics, step)),
+    )
     monkeypatch.setattr(mlflow_tracker.mlflow, "log_artifact", fake_log_artifact)
     return recorded
 
 
 @pytest.fixture
-def tracker(fake_mlflow: dict[str, Any]) -> MLflowTracker:
+def tracker(fake_mlflow: dict[str, Any]) -> MLflowTracker:  # noqa: ARG001
     return MLflowTracker(tracking_uri="http://example.test", experiment_name="exp")
 
 
@@ -47,7 +51,11 @@ def context() -> RunContext:
     return RunContext(run_name="single-random-cd2cr", params={"ratio": "10"}, tags={"setting": "single"})
 
 
-def test_new_run_logs_params_and_exposes_run_id(tracker: MLflowTracker, context: RunContext, fake_mlflow: dict[str, Any]) -> None:
+def test_new_run_logs_params_and_exposes_run_id(
+    tracker: MLflowTracker,
+    context: RunContext,
+    fake_mlflow: dict[str, Any],
+) -> None:
     with tracker.run(context, run_id=None) as run_id:
         assert run_id == "run-123"
         assert tracker.run_id == "run-123"
@@ -58,7 +66,11 @@ def test_new_run_logs_params_and_exposes_run_id(tracker: MLflowTracker, context:
     assert fake_mlflow["start_run_kwargs"][0]["tags"] == {"setting": "single"}
 
 
-def test_resumed_run_does_not_relog_params(tracker: MLflowTracker, context: RunContext, fake_mlflow: dict[str, Any]) -> None:
+def test_resumed_run_does_not_relog_params(
+    tracker: MLflowTracker,
+    context: RunContext,
+    fake_mlflow: dict[str, Any],
+) -> None:
     with tracker.run(context, run_id="existing-run") as run_id:
         assert run_id == "existing-run"
 
@@ -66,7 +78,11 @@ def test_resumed_run_does_not_relog_params(tracker: MLflowTracker, context: RunC
     assert fake_mlflow["start_run_kwargs"] == [{"run_id": "existing-run"}]
 
 
-def test_run_uploads_log_artifact_with_both_logging_systems(tracker: MLflowTracker, context: RunContext, fake_mlflow: dict[str, Any]) -> None:
+def test_run_uploads_log_artifact_with_both_logging_systems(
+    tracker: MLflowTracker,
+    context: RunContext,
+    fake_mlflow: dict[str, Any],
+) -> None:
     with tracker.run(context, run_id=None):
         logger.info("a loguru line emitted during the run")
         logging.getLogger("test.capture").error("a stdlib line emitted during the run")
@@ -78,7 +94,11 @@ def test_run_uploads_log_artifact_with_both_logging_systems(tracker: MLflowTrack
     assert "\x1b[" not in contents
 
 
-def test_run_uploads_logs_even_when_body_raises(tracker: MLflowTracker, context: RunContext, fake_mlflow: dict[str, Any]) -> None:
+def test_run_uploads_logs_even_when_body_raises(
+    tracker: MLflowTracker,
+    context: RunContext,
+    fake_mlflow: dict[str, Any],
+) -> None:
     with pytest.raises(ValueError, match="boom"):  # noqa: PT012, SIM117
         with tracker.run(context, run_id=None):
             logger.info("logged before failure")
@@ -88,7 +108,11 @@ def test_run_uploads_logs_even_when_body_raises(tracker: MLflowTracker, context:
     assert tracker.run_id is None
 
 
-def test_metrics_are_forwarded_with_step(tracker: MLflowTracker, context: RunContext, fake_mlflow: dict[str, Any]) -> None:
+def test_metrics_are_forwarded_with_step(
+    tracker: MLflowTracker,
+    context: RunContext,
+    fake_mlflow: dict[str, Any],
+) -> None:
     with tracker.run(context, run_id=None):
         tracker.log_metrics({"dev/f1": 0.5}, step=3)
 
@@ -111,7 +135,10 @@ def test_factory_builds_noop_without_tracking_uri(monkeypatch: pytest.MonkeyPatc
     assert isinstance(TrackerFactory.build(), NoOpTracker)
 
 
-def test_factory_builds_mlflow_tracker_with_tracking_uri(monkeypatch: pytest.MonkeyPatch, fake_mlflow: dict[str, Any]) -> None:
+def test_factory_builds_mlflow_tracker_with_tracking_uri(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_mlflow: dict[str, Any],  # noqa: ARG001
+) -> None:
     monkeypatch.setattr(mlflow_tracker, "MLFLOW_TRACKING_URI", "http://example.test")
 
     assert isinstance(TrackerFactory.build(), MLflowTracker)
