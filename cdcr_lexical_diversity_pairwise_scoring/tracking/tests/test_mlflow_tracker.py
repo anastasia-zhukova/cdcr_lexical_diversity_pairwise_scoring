@@ -63,7 +63,7 @@ def test_resumed_run_does_not_relog_params(tracker: MLflowTracker, context: RunC
         assert run_id == "existing-run"
 
     assert fake_mlflow["params"] == []
-    assert fake_mlflow["start_run_kwargs"][0]["run_id"] == "existing-run"
+    assert fake_mlflow["start_run_kwargs"] == [{"run_id": "existing-run"}]
 
 
 def test_run_uploads_log_artifact_with_both_logging_systems(tracker: MLflowTracker, context: RunContext, fake_mlflow: dict[str, Any]) -> None:

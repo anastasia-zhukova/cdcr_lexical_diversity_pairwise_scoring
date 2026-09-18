@@ -154,12 +154,19 @@ class MLflowTracker(ExperimentTracker):
         run_id: str | None,
     ) -> Iterator[str | None]:
         mlflow.set_experiment(self._experiment_name)
+        resumed = run_id is not None
 
-        with mlflow.start_run(run_id=run_id, run_name=context.run_name, tags=context.tags) as active_run:
+        # A resumed run keeps its own name, tags and params: the context describes the current
+        # job, which may be scoring the results of a different experiment config.
+        if resumed:
+            run_arguments = {"run_id": run_id}
+        else:
+            run_arguments = {"run_name": context.run_name, "tags": context.tags}
+
+        with mlflow.start_run(**run_arguments) as active_run:
             self._run_id = active_run.info.run_id
 
             with self._capture_logs():
-                resumed = run_id is not None
                 logger.info(f"{'Resumed' if resumed else 'Started'} MLflow run '{context.run_name}' (run_id={self._run_id}).")
 
                 if not resumed:

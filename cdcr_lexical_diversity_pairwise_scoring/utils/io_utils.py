@@ -16,8 +16,8 @@ def create_dataset_save_path(split: Split, type_of_pairs: MentionPairStrategy, s
 def get_dataset_info_save_path():
     return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "datasets.json"
 
-def get_model_info_save_path():
-    return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "model.json"
+def get_model_info_save_path(experiment_name: str = CONFIG_NAME):
+    return PROJECT_ROOT / "experiment_cache_results" / experiment_name / "model.json"
 
 def get_conll_files_root_path(experiment_name: str = CONFIG_NAME):
     folder = PROJECT_ROOT / "experiment_cache_results" / experiment_name / "predictions_conll"
