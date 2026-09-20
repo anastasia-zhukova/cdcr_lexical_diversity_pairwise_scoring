@@ -52,7 +52,7 @@ TODO AZ: a code for the lemma baseline is in the uCDCR project, give a link
 
 
 ## Running sweeps over all experiment configs
-`make <step>` runs one pipeline step for every config in `config/` (`make gen-pairs`, `make embed`, `make train`,
+`make <step>` runs one pipeline step for every config in `config/` except the `test_*` smoke configs (`make gen-pairs`, `make embed`, `make train`,
 `make inference`, `make scoring`); `make all` runs the five steps in order, each swept over all configs;
 `make pipeline CONFIG=<name>` runs all steps for one config. Restrict a sweep with `CONFIGS="a b"`. A failing
 config does not stop the sweep — failures are listed at the end and each run's output is kept in `sweep_logs/`.
