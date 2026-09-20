@@ -106,6 +106,10 @@ def predict_and_cluster(
                 experiment_results_dict[dataset][topic_id][pairs_type] = []
 
                 all_pairs = test_dataset.positive_pairs_eval_format[dataset][topic_id][pairs_type] + test_dataset.negative_pairs_eval_format[dataset][topic_id][pairs_type]
+                if len(all_pairs) == 0:
+                    # e.g. the "entities" pairs of an event-only dataset: nothing to score or cluster
+                    continue
+
                 # key = f"{dataset}_{topic_id}_{pairs_type}"
                 # if key in predictions:
                 #     all_scores = predictions[key]
