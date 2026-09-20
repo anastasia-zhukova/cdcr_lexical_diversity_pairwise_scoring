@@ -33,14 +33,14 @@ from cdcr_lexical_diversity_pairwise_scoring.constants import (
     MAX_ALLOWED_BATCH_SIZE,
     PROJECT_ROOT,
     CLUSTERING_THRESHOLD,
-    CONFIG_NAME,
+    DEFAULT_CONFIG_NAME,
     MLFLOW_EXPERIMENT_NAME,
     MLFLOW_INFERENCE_ARTIFACT_DIR,
     MLFLOW_RUN_ID_KEY,
     MLFLOW_TRACKING_URI,
 )
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file, get_predicted_cluster_path, get_conll_files_root_path, get_evaluation_result_path
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file, get_predicted_cluster_path, get_conll_files_root_path, get_evaluation_result_path, get_experiment_name
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet, EvalPairsType
 from cdcr_lexical_diversity_pairwise_scoring.tracking import ExperimentTracker, RunContext, TrackerFactory
 
@@ -92,7 +92,7 @@ def predict_and_cluster(
 
     inference_time_df = pd.DataFrame()
 
-    conll_path = get_conll_files_root_path()
+    conll_path = get_conll_files_root_path(experiment_name)
 
     for dataset, topic_dict in test_dataset.positive_pairs_eval_format.items():
         logger.info(f"Scoring dataset {dataset}")
@@ -154,7 +154,7 @@ def predict_and_cluster(
             # logger.info(f"Cached predictions of topic {topic_id}")
             inference_time_df.to_csv(inf_time_path)
 
-    exp_dict_path = get_predicted_cluster_path()
+    exp_dict_path = get_predicted_cluster_path(experiment_name)
     with exp_dict_path.open("w") as file:
         json.dump(experiment_results_dict, file)
 
@@ -190,24 +190,26 @@ def score_mention_pairs(model: PairwiseModelKenton, all_pairs: list) -> List[flo
     return predictions.tolist()
 
 
-@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=DEFAULT_CONFIG_NAME)
 def main(config: Config):
-    model_config_path = get_model_info_save_path()
+    experiment_name = get_experiment_name()
+    model_config_path = get_model_info_save_path(experiment_name)
     with open(model_config_path, "r") as file:
         model_config = json.load(file)
 
     # attach the inference results to the training run of this experiment
     tracker = TrackerFactory.build(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
     with tracker.run(RunContext.from_hydra(config), run_id=model_config.get(MLFLOW_RUN_ID_KEY)):
-        infer_and_cluster(config, model_config, tracker)
+        infer_and_cluster(config, experiment_name, model_config, tracker)
 
 
 def infer_and_cluster(
     config: Config,
+    experiment_name: str,
     model_config: dict,
     tracker: ExperimentTracker,
 ) -> None:
-    dataset_file_path = get_dataset_info_save_path()
+    dataset_file_path = get_dataset_info_save_path(experiment_name)
     with open(dataset_file_path, "r") as file:
         dataset_config = json.load(file)
 
@@ -225,7 +227,7 @@ def infer_and_cluster(
     predict_and_cluster(
         test_dataset=test_dataset,
         model=model,
-        experiment_name=CONFIG_NAME,
+        experiment_name=experiment_name,
         tracker=tracker,
         evaluation_level=config.test_scope,
     )
