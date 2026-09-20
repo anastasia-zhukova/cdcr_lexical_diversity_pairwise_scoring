@@ -14,6 +14,7 @@ from cdcr_lexical_diversity_pairwise_scoring.constants import (
     SCORE_ALL_EXPERIMENTS,
     MLFLOW_EXPERIMENT_NAME,
     MLFLOW_RUN_ID_KEY,
+    MLFLOW_SCORING_ARTIFACT_DIR,
     MLFLOW_TRACKING_URI,
 )
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_info_save_path, get_conll_files_root_path, get_evaluation_result_path
@@ -32,7 +33,6 @@ R = "R"
 F1 = "F1"
 TRUE_LABEL, PRED_LABEL = "label_true", "label_pred"
 SPLIT = "split"
-SCORING_ARTIFACT_DIR = "scoring"
 
 _P_R_KEY_MAP = {
     "muc_p": "muc_precision", "muc_r": "muc_recall",
@@ -168,8 +168,8 @@ def track_experiment_scores(
 
         with tracker.run(RunContext.from_hydra(config), run_id=run_id):
             tracker.log_metrics(metrics, step=None)
-            tracker.log_artifact(summary_path, artifact_path=SCORING_ARTIFACT_DIR)
-            tracker.log_artifact(topics_path, artifact_path=SCORING_ARTIFACT_DIR)
+            tracker.log_artifact(summary_path, artifact_path=MLFLOW_SCORING_ARTIFACT_DIR)
+            tracker.log_artifact(topics_path, artifact_path=MLFLOW_SCORING_ARTIFACT_DIR)
 
 
 @hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)

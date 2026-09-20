@@ -33,11 +33,12 @@ One MLflow run corresponds to one experiment config and spans three scripts:
 
 1. `train.py` opens the run, logs the config as params, per-epoch `train/loss` and
    `dev/{accuracy,precision,recall,f1}`, the best dev F1, the training time and the best
-   checkpoint path. The run id is stored in `experiment_cache_results/<experiment>/model.json`.
+   checkpoint path, and attaches `model.json` under `training/`. The run id is stored in
+   `experiment_cache_results/<experiment>/model.json`.
 2. `inference_clustering.py` resumes the run through that id and attaches the inference-time
-   CSV and the predicted clusters JSON as artifacts.
+   CSV and the predicted clusters JSON under `inference/`.
 3. `scoring.py` resumes the run of every scored experiment and logs the per-dataset CoNLL
-   metrics (`<metric>/<dataset>/<mention_type>`) plus the summary CSVs as artifacts.
+   metrics (`<metric>/<dataset>/<mention_type>`) plus the summary CSVs under `scoring/`.
 
 If `model.json` has no run id (trained before tracking existed), the downstream scripts open a
 fresh run instead so nothing is lost.

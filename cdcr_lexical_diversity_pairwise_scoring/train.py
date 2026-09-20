@@ -26,6 +26,7 @@ from cdcr_lexical_diversity_pairwise_scoring.constants import (
     MLFLOW_EXPERIMENT_NAME,
     MLFLOW_RUN_ID_KEY,
     MLFLOW_TRACKING_URI,
+    MLFLOW_TRAINING_ARTIFACT_DIR,
 )
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 from cdcr_lexical_diversity_pairwise_scoring.tracking import ExperimentTracker, RunContext, TrackerFactory
@@ -294,7 +295,7 @@ def train_and_save(
 
     tracker.log_metrics({"dev/best_f1": eval_res, "train/total_time_seconds": total_train_time}, step=None)
     tracker.log_params({"best_model_path": str(best_model_path), "train_datasets": _train_names, "dev_datasets": _dev_names})
-    tracker.log_artifact(model_config_path, artifact_path=None)
+    tracker.log_artifact(model_config_path, artifact_path=MLFLOW_TRAINING_ARTIFACT_DIR)
 
 
 if __name__ == "__main__":

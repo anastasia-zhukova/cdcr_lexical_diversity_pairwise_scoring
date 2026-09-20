@@ -15,8 +15,12 @@ load_dotenv(PROJECT_ROOT / ".env")
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "")
 MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "cdcr_lexical_diversity_pairwise_scoring")
 MLFLOW_RUN_ID_KEY = "mlflow_run_id"
+# Artifact directories of a run: one per pipeline step plus the captured log
 MLFLOW_LOG_ARTIFACT_DIR = "logs"
 MLFLOW_RUN_LOG_FILENAME = "run.log"
+MLFLOW_TRAINING_ARTIFACT_DIR = "training"
+MLFLOW_INFERENCE_ARTIFACT_DIR = "inference"
+MLFLOW_SCORING_ARTIFACT_DIR = "scoring"
 DEFAULT_RATIO = 20
 DEFAULT_TRAIN = 40000000
 DEFAULT_DEV = 8000
