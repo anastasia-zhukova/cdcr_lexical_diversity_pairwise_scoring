@@ -23,10 +23,10 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, DEFAULT_RATIO, CONFIG_NAME
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, DEFAULT_RATIO, DEFAULT_CONFIG_NAME
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, uCDCRDataSet, MentionPairStrategy, DatasetSetting
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import ScopeConfig
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_dataset_save_path, get_dataset_info_save_path
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_dataset_save_path, get_dataset_info_save_path, get_experiment_name
 
 
 @dataclass
@@ -55,12 +55,13 @@ class Config:
 
 
 cs = ConfigStore.instance()
-cs.store(name=CONFIG_NAME, node=Config)
+cs.store(name=DEFAULT_CONFIG_NAME, node=Config)
 
 
-@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=DEFAULT_CONFIG_NAME)
 def main(config: Config) -> None:
     logger.debug(config)
+    experiment_name = get_experiment_name()
     random.seed(0)
     dataset_dict = {}
 
@@ -91,7 +92,7 @@ def main(config: Config) -> None:
             ratio = -1
             type_of_pairs = MentionPairStrategy.all
 
-        save_path = create_dataset_save_path(split, type_of_pairs, scope, max_pairs, ratio, dataset.dataset_components)
+        save_path = create_dataset_save_path(experiment_name, split, type_of_pairs, scope, max_pairs, ratio, dataset.dataset_components)
         if save_path.exists():
             logger.info(f"A dataset for {split.value} with the same config (path {str(save_path)}) already exists. Skipped.")
             dataset_dict[split.value] = str(save_path)
@@ -102,7 +103,7 @@ def main(config: Config) -> None:
         dataset_dict[split.value] = str(save_path)
 
     # save all paths to the created datasets for this experiment
-    save_path = get_dataset_info_save_path()
+    save_path = get_dataset_info_save_path(experiment_name)
     with open(save_path, "w", encoding="utf-8") as file:
         json.dump(dataset_dict, file)
 

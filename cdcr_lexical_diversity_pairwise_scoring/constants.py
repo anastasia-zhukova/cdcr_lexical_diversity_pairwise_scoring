@@ -38,4 +38,5 @@ MAX_ALLOWED_BATCH_SIZE = 200
 CLUSTERING_THRESHOLD = 0.5
 EXCLUDE_SINGLETONS = True
 SCORE_ALL_EXPERIMENTS = True
-CONFIG_NAME = "test_random"
+# Experiment config used when a script is started without --config-name
+DEFAULT_CONFIG_NAME = "test_random"
