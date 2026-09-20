@@ -129,16 +129,11 @@ def test_noop_tracker_yields_no_run_id(context: RunContext) -> None:
     assert tracker.run_id is None
 
 
-def test_factory_builds_noop_without_tracking_uri(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(mlflow_tracker, "MLFLOW_TRACKING_URI", "")
-
-    assert isinstance(TrackerFactory.build(), NoOpTracker)
+def test_factory_builds_noop_without_tracking_uri() -> None:
+    assert isinstance(TrackerFactory.build(tracking_uri="", experiment_name="exp"), NoOpTracker)
 
 
-def test_factory_builds_mlflow_tracker_with_tracking_uri(
-    monkeypatch: pytest.MonkeyPatch,
-    fake_mlflow: dict[str, Any],  # noqa: ARG001
-) -> None:
-    monkeypatch.setattr(mlflow_tracker, "MLFLOW_TRACKING_URI", "http://example.test")
+def test_factory_builds_mlflow_tracker_with_tracking_uri(fake_mlflow: dict[str, Any]) -> None:  # noqa: ARG001
+    tracker = TrackerFactory.build(tracking_uri="http://example.test", experiment_name="exp")
 
-    assert isinstance(TrackerFactory.build(), MLflowTracker)
+    assert isinstance(tracker, MLflowTracker)

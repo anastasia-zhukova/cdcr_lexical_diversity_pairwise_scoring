@@ -10,14 +10,16 @@ Experiment tracking for the pipeline scripts, backed by MLflow.
   - `MLflowTracker` — the MLflow implementation. Opens/resumes a run, logs the params of a new
     run and tees everything logged during the run (both `loguru` and stdlib `logging`) into a
     `logs/run.log` artifact — also when the run fails.
-  - `NoOpTracker` — used when no tracking server is configured, so the pipeline runs unchanged.
-  - `TrackerFactory.build()` — picks the implementation from the environment.
+  - `NoOpTracker` — records nothing, so the pipeline runs unchanged.
+  - `TrackerFactory.build(tracking_uri, experiment_name)` — `MLflowTracker` for a non-empty tracking URI,
+    `NoOpTracker` otherwise. The package never reads the environment itself: the scripts pass the values
+    from `constants.py` in.
 - `run_context.py` — `RunContext`: run name, params and tags derived from the Hydra config of
   the running job. The run is named after the experiment config (e.g. `single-random-cd2cr`).
 
 ## Configuration
 
-Read from `.env` (see `.env.example`) via `constants.py`:
+Read from `.env` (see `.env.example`) by `constants.py` and handed to `TrackerFactory.build()` by the scripts:
 
 | variable                  | meaning                                                            |
 |---------------------------|--------------------------------------------------------------------|

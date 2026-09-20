@@ -29,7 +29,15 @@ from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import write_coref_scorer_results, write_coref_scorer_results_simple
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
-from cdcr_lexical_diversity_pairwise_scoring.constants import MAX_ALLOWED_BATCH_SIZE, PROJECT_ROOT, CLUSTERING_THRESHOLD, CONFIG_NAME, MLFLOW_RUN_ID_KEY
+from cdcr_lexical_diversity_pairwise_scoring.constants import (
+    MAX_ALLOWED_BATCH_SIZE,
+    PROJECT_ROOT,
+    CLUSTERING_THRESHOLD,
+    CONFIG_NAME,
+    MLFLOW_EXPERIMENT_NAME,
+    MLFLOW_RUN_ID_KEY,
+    MLFLOW_TRACKING_URI,
+)
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file, get_predicted_cluster_path, get_conll_files_root_path, get_evaluation_result_path
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet, EvalPairsType
@@ -184,7 +192,7 @@ def main(config: Config):
         model_config = json.load(file)
 
     # attach the inference results to the training run of this experiment
-    tracker = TrackerFactory.build()
+    tracker = TrackerFactory.build(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
     with tracker.run(RunContext.from_hydra(config), run_id=model_config.get(MLFLOW_RUN_ID_KEY)):
         infer_and_cluster(config, model_config, tracker)
 

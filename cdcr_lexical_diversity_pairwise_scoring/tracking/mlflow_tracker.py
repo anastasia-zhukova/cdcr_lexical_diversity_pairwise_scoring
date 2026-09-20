@@ -9,12 +9,7 @@ from typing import Any
 import mlflow
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.constants import (
-    MLFLOW_EXPERIMENT_NAME,
-    MLFLOW_LOG_ARTIFACT_DIR,
-    MLFLOW_RUN_LOG_FILENAME,
-    MLFLOW_TRACKING_URI,
-)
+from cdcr_lexical_diversity_pairwise_scoring.constants import MLFLOW_LOG_ARTIFACT_DIR, MLFLOW_RUN_LOG_FILENAME
 from cdcr_lexical_diversity_pairwise_scoring.tracking.run_context import RunContext
 
 # Both logging systems of the project (loguru in the scripts, stdlib logging in `dataobjs`)
@@ -77,7 +72,7 @@ class ExperimentTracker(ABC):
 
 
 class NoOpTracker(ExperimentTracker):
-    """Tracker used when no tracking server is configured: the pipeline runs untouched."""
+    """Tracker that records nothing: the pipeline runs untouched."""
 
     @property
     def run_id(self) -> str | None:
@@ -89,9 +84,7 @@ class NoOpTracker(ExperimentTracker):
         context: RunContext,
         run_id: str | None,
     ) -> Iterator[str | None]:
-        logger.warning(
-            f"MLflow tracking is disabled (no MLFLOW_TRACKING_URI). Run '{context.run_name}' is not tracked.",
-        )
+        logger.warning(f"Experiment tracking is disabled. Run '{context.run_name}' is not tracked.")
         yield None
 
     def log_params(self, params: dict[str, Any]) -> None:
@@ -236,11 +229,14 @@ class MLflowTracker(ExperimentTracker):
 
 
 class TrackerFactory:
-    """Builds the tracker from the environment: MLflow when a tracking URI is set, no-op otherwise."""
+    """Builds the tracker for a run: MLflow when a tracking URI is given, no-op otherwise."""
 
     @staticmethod
-    def build() -> ExperimentTracker:
-        if MLFLOW_TRACKING_URI == "":
+    def build(
+        tracking_uri: str,
+        experiment_name: str,
+    ) -> ExperimentTracker:
+        if tracking_uri == "":
             return NoOpTracker()
 
-        return MLflowTracker(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
+        return MLflowTracker(tracking_uri=tracking_uri, experiment_name=experiment_name)
