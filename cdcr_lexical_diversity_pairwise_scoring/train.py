@@ -19,7 +19,7 @@ from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, precision_recall_f1
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path, get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file, get_experiment_name
-from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
+from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import LogFile
 from cdcr_lexical_diversity_pairwise_scoring.constants import (
     PROJECT_ROOT,
     DEFAULT_CONFIG_NAME,
@@ -246,8 +246,8 @@ def train_and_save(
         + "_itr"
         + str(config.training_iterations)
     )
-    # TODO: replace with simple logger.
-    create_logger_with_fh(output_folder / ("train_" + log_params_str))
+    # everything logged from here on (loguru and stdlib) is also written next to the checkpoints
+    LogFile(output_folder / f"train_{log_params_str}.log").attach()
 
     # TODO: prettify
     logger.info(

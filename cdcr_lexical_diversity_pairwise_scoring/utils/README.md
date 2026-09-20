@@ -17,6 +17,7 @@ Helpers shared by the pipeline scripts.
 - `eval_utils.py` — confusion matrix and precision/recall/F1 for the pairwise dev evaluation.
 - `string_utils.py` — spaCy-based head/lemma extraction (used by the statistics helper scripts).
 - `clustering_utils.py` — legacy agglomerative clustering helper, unused by the current pipeline.
-- `log_utils.py` — legacy stdlib file logger used by `train.py`.
+- `log_utils.py` — `LogFile`: attach it to write everything logged from then on (loguru and stdlib) into a
+  file; `train.py` uses it for the `train_<params>.log` next to the checkpoints.
 
 Tests live in `tests/` (`pytest cdcr_lexical_diversity_pairwise_scoring/utils/tests`).
