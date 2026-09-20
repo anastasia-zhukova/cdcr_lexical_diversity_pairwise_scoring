@@ -3,29 +3,44 @@ import os
 from typing import Union, List
 from pathlib import Path
 
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME
+from hydra.core.hydra_config import HydraConfig
+
+from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionData, MentionuCDCR
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, MentionPairStrategy, ScopeConfig
 
 
-def create_dataset_save_path(split: Split, type_of_pairs: MentionPairStrategy, scope: ScopeConfig, max_pairs: Union[int, None], ratio: int, dataset_components: List[str]):
-    folder = PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME
+def get_experiment_name() -> str:
+    """The experiment the running script belongs to: the name of its Hydra config (e.g. `single-random-cd2cr`).
+
+    Only valid inside a `@hydra.main` function. Every output of an experiment (pair datasets, model info,
+    predictions) lives under `experiment_cache_results/<experiment name>/`.
+    """
+    return HydraConfig.get().job.config_name
+
+
+def get_experiment_root_path(experiment_name: str) -> Path:
+    return PROJECT_ROOT / "experiment_cache_results" / experiment_name
+
+
+def create_dataset_save_path(experiment_name: str, split: Split, type_of_pairs: MentionPairStrategy, scope: ScopeConfig, max_pairs: Union[int, None], ratio: int, dataset_components: List[str]):
+    folder = get_experiment_root_path(experiment_name)
     Path.mkdir(folder, exist_ok=True)
     return folder / f"{split}_{type_of_pairs}_{scope}_{max_pairs}_{ratio}_{'-'.join(dataset_components)}.pickle"
 
-def get_dataset_info_save_path():
-    return PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "datasets.json"
+def get_dataset_info_save_path(experiment_name: str):
+    return get_experiment_root_path(experiment_name) / "datasets.json"
 
-def get_model_info_save_path(experiment_name: str = CONFIG_NAME):
-    return PROJECT_ROOT / "experiment_cache_results" / experiment_name / "model.json"
+def get_model_info_save_path(experiment_name: str):
+    return get_experiment_root_path(experiment_name) / "model.json"
 
-def get_conll_files_root_path(experiment_name: str = CONFIG_NAME):
-    folder = PROJECT_ROOT / "experiment_cache_results" / experiment_name / "predictions_conll"
+def get_conll_files_root_path(experiment_name: str):
+    folder = get_experiment_root_path(experiment_name) / "predictions_conll"
     Path.mkdir(folder, exist_ok=True)
     return folder
 
-def get_predicted_cluster_path():
-    folder = PROJECT_ROOT / "experiment_cache_results" / CONFIG_NAME / "predictions_json"
+def get_predicted_cluster_path(experiment_name: str):
+    folder = get_experiment_root_path(experiment_name) / "predictions_json"
     Path.mkdir(folder, exist_ok=True)
     return  folder / "results.json"
 

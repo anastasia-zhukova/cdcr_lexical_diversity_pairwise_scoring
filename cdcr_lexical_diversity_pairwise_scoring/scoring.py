@@ -10,14 +10,14 @@ import json
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.constants import (
     PROJECT_ROOT,
-    CONFIG_NAME,
+    DEFAULT_CONFIG_NAME,
     SCORE_ALL_EXPERIMENTS,
     MLFLOW_EXPERIMENT_NAME,
     MLFLOW_RUN_ID_KEY,
     MLFLOW_SCORING_ARTIFACT_DIR,
     MLFLOW_TRACKING_URI,
 )
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_info_save_path, get_conll_files_root_path, get_evaluation_result_path
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_info_save_path, get_conll_files_root_path, get_evaluation_result_path, get_experiment_name
 from helper_scripts.metrics import compute_metrics_from_assignments
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 from cdcr_lexical_diversity_pairwise_scoring.tracking import ExperimentTracker, RunContext, TrackerFactory
@@ -172,7 +172,7 @@ def track_experiment_scores(
             tracker.log_artifact(topics_path, artifact_path=MLFLOW_SCORING_ARTIFACT_DIR)
 
 
-@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=DEFAULT_CONFIG_NAME)
 def main(config: Config):
     """
     Computes CoNLL scores for the experiment that we want or for everything
@@ -187,7 +187,7 @@ def main(config: Config):
     if SCORE_ALL_EXPERIMENTS:
         experiment_target = [item.name for item in results_folder.iterdir() if item.is_dir()]
     else:
-        experiment_target = [CONFIG_NAME]
+        experiment_target = [get_experiment_name()]
 
     summary_df = pd.DataFrame()
     summary_df_subtopic = pd.DataFrame()
