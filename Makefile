@@ -1,4 +1,5 @@
-# Sweeps of the pipeline steps over the experiment configs in config/ (config/_archive is ignored).
+# Sweeps of the pipeline steps over the experiment configs in config/ (config/_archive and the
+# test_*.yaml smoke configs are ignored; pass CONFIGS=... to run those explicitly).
 #
 #   make gen-pairs                 step 1 for every config
 #   make embed                     step 2 for every config
@@ -20,7 +21,8 @@ PACKAGE     := cdcr_lexical_diversity_pairwise_scoring
 CONFIG_DIR  := config
 LOG_DIR     ?= sweep_logs
 MEMORY_MAX  ?= 12G
-CONFIGS     ?= $(sort $(notdir $(basename $(wildcard $(CONFIG_DIR)/*.yaml))))
+ALL_CONFIGS := $(sort $(notdir $(basename $(wildcard $(CONFIG_DIR)/*.yaml))))
+CONFIGS     ?= $(filter-out test_%,$(ALL_CONFIGS))
 
 # Pair sampling and the order of the CoNLL output go through Python sets: pinning the hash seed makes
 # a sweep reproducible run to run. Override with PYTHONHASHSEED=random to get the interpreter default.
@@ -44,7 +46,7 @@ endif
 .PHONY: help all pipeline list-configs $(STEPS)
 
 help:
-	@sed -n '1,17p' $(MAKEFILE_LIST) | sed 's/^# \{0,1\}//'
+	@sed -n '1,18p' $(MAKEFILE_LIST) | sed 's/^# \{0,1\}//'
 
 list-configs:
 	@printf '%s\n' $(CONFIGS)
