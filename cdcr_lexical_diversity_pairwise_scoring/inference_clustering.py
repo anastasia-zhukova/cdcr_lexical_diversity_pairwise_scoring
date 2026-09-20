@@ -44,7 +44,7 @@ from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_i
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet, EvalPairsType
 from cdcr_lexical_diversity_pairwise_scoring.tracking import ExperimentTracker, RunContext, TrackerFactory
 
-torch.serialization.add_safe_globals([PairwiseModelKenton, torch.nn.modules.linear.Linear, torch.nn.modules.container.Sequential, torch.nn.modules.activation.ReLU, EmbedFromFile, pathlib.WindowsPath])
+torch.serialization.add_safe_globals([PairwiseModelKenton, torch.nn.modules.linear.Linear, torch.nn.modules.container.Sequential, torch.nn.modules.activation.ReLU, EmbedFromFile, pathlib.WindowsPath, pathlib.PosixPath])
 
 agl_clust = AgglomerativeClustering(
         n_clusters=None,
