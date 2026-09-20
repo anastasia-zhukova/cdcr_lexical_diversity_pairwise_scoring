@@ -9,7 +9,7 @@ from typing import Any
 import mlflow
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.constants import MLFLOW_LOG_ARTIFACT_DIR, MLFLOW_RUN_LOG_FILENAME
+from cdcr_lexical_diversity_pairwise_scoring.constants import MLFLOW_LOG_ARTIFACT_DIR, MLFLOW_RUN_LOG_EXTENSION
 from cdcr_lexical_diversity_pairwise_scoring.tracking.run_context import RunContext
 
 # Both logging systems of the project (loguru in the scripts, stdlib logging in `dataobjs`)
@@ -157,7 +157,7 @@ class MLflowTracker(ExperimentTracker):
         with mlflow.start_run(**run_arguments) as active_run:
             self._run_id = active_run.info.run_id
 
-            with self._capture_logs():
+            with self._capture_logs(context.job_name):
                 action = "Resumed" if resumed else "Started"
                 logger.info(f"{action} MLflow run '{context.run_name}' (run_id={self._run_id}).")
 
@@ -205,13 +205,14 @@ class MLflowTracker(ExperimentTracker):
         mlflow.log_dict(payload, artifact_file)
 
     @contextmanager
-    def _capture_logs(self) -> Iterator[None]:
+    def _capture_logs(self, job_name: str) -> Iterator[None]:
         """Tee everything logged during the run into a file and attach it to the active run.
 
-        The artifact is uploaded in `finally` so a failed or aborted run still keeps its logs.
+        The file is named after the job so that every pipeline step attaching to the run keeps its
+        own log. The artifact is uploaded in `finally` so a failed or aborted run still keeps its logs.
         """
         with tempfile.TemporaryDirectory() as temporary_directory:
-            log_path = Path(temporary_directory) / MLFLOW_RUN_LOG_FILENAME
+            log_path = Path(temporary_directory) / f"{job_name}{MLFLOW_RUN_LOG_EXTENSION}"
             handler = logging.FileHandler(log_path, encoding="utf-8")
             handler.setFormatter(logging.Formatter(_CAPTURED_LOG_FORMAT))
 
