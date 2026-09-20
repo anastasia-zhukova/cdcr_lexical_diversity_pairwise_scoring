@@ -48,7 +48,9 @@ def tracker(fake_mlflow: dict[str, Any]) -> MLflowTracker:  # noqa: ARG001
 
 @pytest.fixture
 def context() -> RunContext:
-    return RunContext(run_name="single-random-cd2cr", params={"ratio": "10"}, tags={"setting": "single"})
+    return RunContext(
+        run_name="single-random-cd2cr", job_name="train", params={"ratio": "10"}, tags={"setting": "single"},
+    )
 
 
 def test_new_run_logs_params_and_exposes_run_id(
@@ -87,11 +89,24 @@ def test_run_uploads_log_artifact_with_both_logging_systems(
         logger.info("a loguru line emitted during the run")
         logging.getLogger("test.capture").error("a stdlib line emitted during the run")
 
-    artifact_path, contents = fake_mlflow["artifacts"]["run.log"]
+    artifact_path, contents = fake_mlflow["artifacts"]["train.log"]
     assert artifact_path == "logs"
     assert "a loguru line emitted during the run" in contents
     assert "a stdlib line emitted during the run" in contents
     assert "\x1b[" not in contents
+
+
+def test_log_artifact_is_named_after_the_job(
+    tracker: MLflowTracker,
+    fake_mlflow: dict[str, Any],
+) -> None:
+    context = RunContext(run_name="single-random-cd2cr", job_name="scoring")
+
+    with tracker.run(context, run_id="existing-run"):
+        logger.info("scoring line")
+
+    assert "scoring.log" in fake_mlflow["artifacts"]
+    assert "scoring line" in fake_mlflow["artifacts"]["scoring.log"][1]
 
 
 def test_run_uploads_logs_even_when_body_raises(
@@ -104,7 +119,7 @@ def test_run_uploads_logs_even_when_body_raises(
             logger.info("logged before failure")
             raise ValueError("boom")
 
-    assert "logged before failure" in fake_mlflow["artifacts"]["run.log"][1]
+    assert "logged before failure" in fake_mlflow["artifacts"]["train.log"][1]
     assert tracker.run_id is None
 
 

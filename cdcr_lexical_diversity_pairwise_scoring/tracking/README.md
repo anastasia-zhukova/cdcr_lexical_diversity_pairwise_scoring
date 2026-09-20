@@ -9,7 +9,8 @@ Experiment tracking for the pipeline scripts, backed by MLflow.
     `log_metric(s)`, `log_artifact`, `log_dict`).
   - `MLflowTracker` — the MLflow implementation. Opens/resumes a run, logs the params of a new
     run and tees everything logged during the run (both `loguru` and stdlib `logging`) into a
-    `logs/run.log` artifact — also when the run fails.
+    `logs/<job>.log` artifact (`train.log`, `inference_clustering.log`, `scoring.log`) — also when the
+    run fails.
   - `NoOpTracker` — records nothing, so the pipeline runs unchanged.
   - `TrackerFactory.build(tracking_uri, experiment_name)` — `MLflowTracker` for a non-empty tracking URI,
     `NoOpTracker` otherwise. The package never reads the environment itself: the scripts pass the values

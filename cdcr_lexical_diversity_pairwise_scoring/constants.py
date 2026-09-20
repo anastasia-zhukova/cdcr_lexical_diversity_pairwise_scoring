@@ -17,7 +17,7 @@ MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "cdcr_lexical_
 MLFLOW_RUN_ID_KEY = "mlflow_run_id"
 # Artifact directories of a run: one per pipeline step plus the captured log
 MLFLOW_LOG_ARTIFACT_DIR = "logs"
-MLFLOW_RUN_LOG_FILENAME = "run.log"
+MLFLOW_RUN_LOG_EXTENSION = ".log"
 MLFLOW_TRAINING_ARTIFACT_DIR = "training"
 MLFLOW_INFERENCE_ARTIFACT_DIR = "inference"
 MLFLOW_SCORING_ARTIFACT_DIR = "scoring"
