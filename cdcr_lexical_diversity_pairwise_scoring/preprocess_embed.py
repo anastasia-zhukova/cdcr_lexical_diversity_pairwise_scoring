@@ -15,90 +15,45 @@ import pickle
 import random
 import json
 from pathlib import Path
-from tqdm import tqdm
 import hydra
 import torch
 from datetime import datetime
 import pandas as pd
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_encoding_cache_file, get_evaluation_result_path
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_evaluation_result_path
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedTransformersGenerics
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME
-from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split, uCDCRDataSet
+from cdcr_lexical_diversity_pairwise_scoring.utils.encoding_cache import ENCODING_PAIR_TYPE, DatasetMentionEncoder
 
 torch.manual_seed(0)
 random.seed(0)
 
 
 def encode_dataset_mentions(dataset: uCDCRDataSet, split: str, embed_model: EmbedTransformersGenerics, config: Config):
-    now_ = datetime.now()
-    save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_inference_time.csv'
-    inf_time_path = get_evaluation_result_path() / save_filename
-    inference_time_df = pd.DataFrame()
+    encoder = DatasetMentionEncoder(embed_model=embed_model, language_model=config.language_model, split=split)
+    timings = encoder.encode(dataset)
 
-    device = torch.device("cuda" if torch.cuda.is_available() and config.use_cuda else "cpu")
-    topic_num = len(dataset.topics.topics_dict)
-
-    # encoding only mentions from the created pairs
-    mentions_to_encode = set()
-    for mention_pair in dataset.positive_pairs + dataset.negative_pairs:
-        mentions_to_encode.add(mention_pair[0].mention_id)
-        mentions_to_encode.add(mention_pair[1].mention_id)
-
-    if len(dataset.positive_pairs_eval_format):
-        for dataset_name, topic_dict in dataset.positive_pairs_eval_format.items():
-            for topic_id, mention_types_dict in topic_dict.items():
-                for mention_pair in mention_types_dict["mix"] + dataset.negative_pairs_eval_format[dataset_name][topic_id]["mix"]:
-                    mentions_to_encode.add(mention_pair[0].mention_id)
-                    mentions_to_encode.add(mention_pair[1].mention_id)
-
-    encoded_mentions = {}
-    cached_vector_path = None
-    start = datetime.now()
-
-    for i, (topic_id, dataset_name) in enumerate(dataset.topics.topics_to_datasets.items()):
-        cached_vector_path_next = get_encoding_cache_file(split, dataset_name, config.language_model)
-
-        # if it is the same dataset, do not reread the existing file
-        if cached_vector_path_next != cached_vector_path:
-            if cached_vector_path_next.exists():
-                with open(cached_vector_path_next, "rb") as file:
-                    encoded_mentions = pickle.load(file)
-
-        cached_vector_path = cached_vector_path_next
-        topic = dataset.topics.topics_dict[topic_id]
-
-        added_mentions = False
-        for mention in tqdm(topic.mentions, desc=f"Encoding mentions of topic {topic_id} ({i}/{topic_num - 1})"):
-            if mention.mention_id in encoded_mentions:
-                continue
-
-            if mention.mention_id not in mentions_to_encode:
-                continue
-
-            added_mentions = True
-            hidden, first_token, last_token, mention_size = embed_model.get_mention_full_rep(mention)
-            encoded_mentions[mention.mention_id] = (hidden.to(device), first_token.to(device), last_token.to(device), mention_size)
-
-        if added_mentions:
-            with cached_vector_path.open("wb") as file:
-                pickle.dump(encoded_mentions, file)
-
-            #  track time took for the encoding
-            end = datetime.now()
-            if split == "test":
-                inference_time_df = pd.concat([inference_time_df, pd.DataFrame({
+    # track the time the encoding of the test sets took (topics where something was encoded)
+    if split == Split.test:
+        save_filename = f'{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}_inference_time.csv'
+        inference_time_df = pd.DataFrame(
+            [
+                {
                     "experiment": CONFIG_NAME,
-                    "dataset": dataset_name,
-                    "topic": topic_id,
-                    "pair_type": "encoding",
-                    "mentions": len(topic.mentions),
-                    "inference_time": (end-start).total_seconds()
-                }, index=[0])])
-                inference_time_df.to_csv(inf_time_path)
-            start = datetime.now()
+                    "dataset": timing.dataset,
+                    "topic": timing.topic_id,
+                    "pair_type": ENCODING_PAIR_TYPE,
+                    "mentions": timing.mentions_in_topic,
+                    "inference_time": timing.seconds,
+                }
+                for timing in timings
+                if timing.encoded_mentions > 0
+            ],
+        )
+        inference_time_df.to_csv(get_evaluation_result_path() / save_filename)
 
 
 def encode_dataset(
