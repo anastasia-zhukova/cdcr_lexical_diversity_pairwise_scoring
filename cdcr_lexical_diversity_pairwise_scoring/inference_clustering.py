@@ -35,6 +35,7 @@ from cdcr_lexical_diversity_pairwise_scoring.constants import (
     CLUSTERING_THRESHOLD,
     CONFIG_NAME,
     MLFLOW_EXPERIMENT_NAME,
+    MLFLOW_INFERENCE_ARTIFACT_DIR,
     MLFLOW_RUN_ID_KEY,
     MLFLOW_TRACKING_URI,
 )
@@ -156,8 +157,8 @@ def predict_and_cluster(
     logger.info(f"The files for the CoNLL scorer are saved into: {conll_path}.")
     logger.info(f"The files with true and predicted predictions_json are saved into: {exp_dict_path}.")
 
-    tracker.log_artifact(inf_time_path, artifact_path="inference")
-    tracker.log_artifact(exp_dict_path, artifact_path="inference")
+    tracker.log_artifact(inf_time_path, artifact_path=MLFLOW_INFERENCE_ARTIFACT_DIR)
+    tracker.log_artifact(exp_dict_path, artifact_path=MLFLOW_INFERENCE_ARTIFACT_DIR)
     tracker.log_metrics(
         {
             "inference/total_time_seconds": float(inference_time_df["inference_time"].sum()),
