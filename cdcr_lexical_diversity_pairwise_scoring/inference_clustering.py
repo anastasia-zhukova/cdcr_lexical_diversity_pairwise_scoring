@@ -29,10 +29,20 @@ from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import write_coref_scorer_results, write_coref_scorer_results_simple
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
-from cdcr_lexical_diversity_pairwise_scoring.constants import MAX_ALLOWED_BATCH_SIZE, PROJECT_ROOT, CLUSTERING_THRESHOLD, CONFIG_NAME
+from cdcr_lexical_diversity_pairwise_scoring.constants import (
+    MAX_ALLOWED_BATCH_SIZE,
+    PROJECT_ROOT,
+    CLUSTERING_THRESHOLD,
+    CONFIG_NAME,
+    MLFLOW_EXPERIMENT_NAME,
+    MLFLOW_INFERENCE_ARTIFACT_DIR,
+    MLFLOW_RUN_ID_KEY,
+    MLFLOW_TRACKING_URI,
+)
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file, get_predicted_cluster_path, get_conll_files_root_path, get_evaluation_result_path
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet, EvalPairsType
+from cdcr_lexical_diversity_pairwise_scoring.tracking import ExperimentTracker, RunContext, TrackerFactory
 
 torch.serialization.add_safe_globals([PairwiseModelKenton, torch.nn.modules.linear.Linear, torch.nn.modules.container.Sequential, torch.nn.modules.activation.ReLU, EmbedFromFile, pathlib.WindowsPath])
 
@@ -63,6 +73,7 @@ def predict_and_cluster(
     test_dataset: uCDCRDataSet,
     model: PairwiseModelKenton,
     experiment_name: str,
+    tracker: ExperimentTracker,
     evaluation_level: str = "subtopic"
 ):
     # cached_file = f"predictions_{experiment_name}.pickle"
@@ -146,6 +157,16 @@ def predict_and_cluster(
     logger.info(f"The files for the CoNLL scorer are saved into: {conll_path}.")
     logger.info(f"The files with true and predicted predictions_json are saved into: {exp_dict_path}.")
 
+    tracker.log_artifact(inf_time_path, artifact_path=MLFLOW_INFERENCE_ARTIFACT_DIR)
+    tracker.log_artifact(exp_dict_path, artifact_path=MLFLOW_INFERENCE_ARTIFACT_DIR)
+    tracker.log_metrics(
+        {
+            "inference/total_time_seconds": float(inference_time_df["inference_time"].sum()),
+            "inference/scored_topics": float(len(inference_time_df)),
+        },
+        step=None,
+    )
+
 
 def score_mention_pairs(model: PairwiseModelKenton, all_pairs: list) -> List[float]:
     """
@@ -171,6 +192,17 @@ def main(config: Config):
     with open(model_config_path, "r") as file:
         model_config = json.load(file)
 
+    # attach the inference results to the training run of this experiment
+    tracker = TrackerFactory.build(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
+    with tracker.run(RunContext.from_hydra(config), run_id=model_config.get(MLFLOW_RUN_ID_KEY)):
+        infer_and_cluster(config, model_config, tracker)
+
+
+def infer_and_cluster(
+    config: Config,
+    model_config: dict,
+    tracker: ExperimentTracker,
+) -> None:
     dataset_file_path = get_dataset_info_save_path()
     with open(dataset_file_path, "r") as file:
         dataset_config = json.load(file)
@@ -186,7 +218,13 @@ def main(config: Config):
     )
 
     logger.info(f"Running mention scoring with model: {type(model).__name__}")
-    predict_and_cluster(test_dataset=test_dataset, model=model, experiment_name=CONFIG_NAME, evaluation_level=config.test_scope)
+    predict_and_cluster(
+        test_dataset=test_dataset,
+        model=model,
+        experiment_name=CONFIG_NAME,
+        tracker=tracker,
+        evaluation_level=config.test_scope,
+    )
 
 
 if __name__ == "__main__":

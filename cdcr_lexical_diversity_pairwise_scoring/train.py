@@ -14,15 +14,22 @@ from omegaconf import MISSING
 from tqdm import tqdm
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT
 from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, precision_recall_f1
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path, get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file
 from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME
+from cdcr_lexical_diversity_pairwise_scoring.constants import (
+    PROJECT_ROOT,
+    CONFIG_NAME,
+    MLFLOW_EXPERIMENT_NAME,
+    MLFLOW_RUN_ID_KEY,
+    MLFLOW_TRACKING_URI,
+    MLFLOW_TRAINING_ARTIFACT_DIR,
+)
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
+from cdcr_lexical_diversity_pairwise_scoring.tracking import ExperimentTracker, RunContext, TrackerFactory
 
 torch.manual_seed(1234)
 random.seed(1234)
@@ -33,6 +40,7 @@ def train_pairwise(
     pairwise_model: PairwiseModelKenton,
     train,
     validation,
+    tracker: ExperimentTracker,
     batch_size: int,
     epochs: int = 4,
     lr: float = 5e-5,
@@ -78,10 +86,21 @@ def train_pairwise(
                 pbar.set_postfix(loss=f"{cumulative_loss / current_batch:.10f}")
 
         pbar.close()
-        logger.info(f"Finished training for epoch {epoch}. Final loss: {cumulative_loss / current_batch:.10f}")
+        epoch_loss = cumulative_loss / current_batch
+        logger.info(f"Finished training for epoch {epoch}. Final loss: {epoch_loss:.10f}")
 
         pairwise_model.eval()
-        _, _, _, dev_f1 = accuracy_on_dataset("Dev", epoch + 1, pairwise_model, validation)
+        dev_accuracy, dev_precision, dev_recall, dev_f1 = accuracy_on_dataset("Dev", epoch + 1, pairwise_model, validation)
+        tracker.log_metrics(
+            {
+                "train/loss": epoch_loss,
+                "dev/accuracy": dev_accuracy.item(),
+                "dev/precision": dev_precision,
+                "dev/recall": dev_recall,
+                "dev/f1": dev_f1,
+            },
+            step=epoch + 1,
+        )
 
         if best_result_so_far < dev_f1:
             logger.info("Found better model saving")
@@ -189,6 +208,17 @@ def init_basic_training_resources(
 
 @hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
 def main(config: Config):
+    tracker = TrackerFactory.build(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
+
+    with tracker.run(RunContext.from_hydra(config), run_id=None) as run_id:
+        train_and_save(config, tracker, run_id)
+
+
+def train_and_save(
+    config: Config,
+    tracker: ExperimentTracker,
+    run_id: str | None,
+) -> None:
     start_time = datetime.now()
     dt_string = start_time.strftime("%d%m%Y_%H%M%S")
     output_folder = create_and_get_path("checkpoints/" + dt_string)
@@ -243,6 +273,7 @@ def main(config: Config):
         _pairwise_model,
         _event_train_feat,
         _event_validation_feat,
+        tracker,
         config.batch_size,
         config.training_iterations,
         config.learning_rate,
@@ -250,11 +281,21 @@ def main(config: Config):
         weight_decay=config.weight_decay,
     )
     end = datetime.now()
-    run_results = {"eval_dev": eval_res, "model": str(best_model_path), "total_train_time": (end-start).total_seconds()}
+    total_train_time = (end - start).total_seconds()
+    run_results = {
+        "eval_dev": eval_res,
+        "model": str(best_model_path),
+        "total_train_time": total_train_time,
+        MLFLOW_RUN_ID_KEY: run_id,
+    }
 
     model_config_path = get_model_info_save_path()
     with open(model_config_path, "w", encoding="utf-8") as file:
         json.dump(run_results, file)
+
+    tracker.log_metrics({"dev/best_f1": eval_res, "train/total_time_seconds": total_train_time}, step=None)
+    tracker.log_params({"best_model_path": str(best_model_path), "train_datasets": _train_names, "dev_datasets": _dev_names})
+    tracker.log_artifact(model_config_path, artifact_path=MLFLOW_TRAINING_ARTIFACT_DIR)
 
 
 if __name__ == "__main__":

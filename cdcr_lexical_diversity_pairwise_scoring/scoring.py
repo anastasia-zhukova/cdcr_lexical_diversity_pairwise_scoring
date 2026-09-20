@@ -1,16 +1,26 @@
 from pathlib import Path
 import numpy as np
 import subprocess
+import tempfile
 import pandas as pd
 from datetime import datetime
 import hydra
 import json
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME, SCORE_ALL_EXPERIMENTS
+from cdcr_lexical_diversity_pairwise_scoring.constants import (
+    PROJECT_ROOT,
+    CONFIG_NAME,
+    SCORE_ALL_EXPERIMENTS,
+    MLFLOW_EXPERIMENT_NAME,
+    MLFLOW_RUN_ID_KEY,
+    MLFLOW_SCORING_ARTIFACT_DIR,
+    MLFLOW_TRACKING_URI,
+)
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_info_save_path, get_conll_files_root_path, get_evaluation_result_path
 from helper_scripts.metrics import compute_metrics_from_assignments
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
+from cdcr_lexical_diversity_pairwise_scoring.tracking import ExperimentTracker, RunContext, TrackerFactory
 
 MUC = "_MUC"
 B3 = "_B3"
@@ -117,11 +127,57 @@ def run_scorer(key_file_path: Path, response_file_path: Path):
     return output_dict
 
 
+def read_experiment_run_id(experiment: str) -> str | None:
+    """
+    The scoring step attaches to the training run of the experiment; the run id lives in its model.json.
+    """
+    model_info_path = get_model_info_save_path(experiment)
+    if not model_info_path.exists():
+        return None
+
+    with open(model_info_path, "r", encoding="utf-8") as file:
+        return json.load(file).get(MLFLOW_RUN_ID_KEY)
+
+
+def track_experiment_scores(
+    tracker: ExperimentTracker,
+    config: Config,
+    experiment: str,
+    experiment_summary_df: pd.DataFrame,
+    experiment_topics_df: pd.DataFrame,
+) -> None:
+    """
+    Logs the per-dataset scores of one experiment as `<metric>/<dataset>/<mention_type>` metrics
+    of its training run and attaches the per-dataset and per-topic tables as artifacts.
+    """
+    run_id = read_experiment_run_id(experiment)
+    if run_id is None:
+        logger.warning(f"Experiment {experiment} has no tracked training run (no run id in its model.json). Scores are not tracked.")
+        return
+
+    metrics = {}
+    for (_, dataset, mention_type), row in experiment_summary_df.iterrows():
+        for metric_name, value in row.items():
+            metrics[f"{metric_name}/{dataset}/{mention_type}"] = float(value)
+
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        summary_path = Path(temporary_directory) / "conll_evaluation.csv"
+        topics_path = Path(temporary_directory) / "conll_evaluation_topics.csv"
+        experiment_summary_df.to_csv(summary_path)
+        experiment_topics_df.to_csv(topics_path)
+
+        with tracker.run(RunContext.from_hydra(config), run_id=run_id):
+            tracker.log_metrics(metrics, step=None)
+            tracker.log_artifact(summary_path, artifact_path=MLFLOW_SCORING_ARTIFACT_DIR)
+            tracker.log_artifact(topics_path, artifact_path=MLFLOW_SCORING_ARTIFACT_DIR)
+
+
 @hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
 def main(config: Config):
     """
     Computes CoNLL scores for the experiment that we want or for everything
     """
+    tracker = TrackerFactory.build(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
     now_ = datetime.now()
     save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation.csv'
     save_filename_topics = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation_topics.csv'
@@ -143,6 +199,8 @@ def main(config: Config):
             continue
 
         logger.info(f"Scoring experiment {experiment}")
+        experiment_summary_df = pd.DataFrame()
+        experiment_topics_df = pd.DataFrame()
 
         conll_path = get_conll_files_root_path(experiment)
 
@@ -170,10 +228,15 @@ def main(config: Config):
                     summary_dict.update(conll_f1_dict)
                     pair_topic_df = pd.concat([pair_topic_df, pd.DataFrame(summary_dict, index=[f'{experiment}\\{dataset}\\{pair_type}\\{topic}'])], axis=0)
 
+                pair_summary_df = pair_topic_df.drop(columns=["topic"]).groupby(by=["experiment", "dataset","mention_type"]).mean()
+                experiment_topics_df = pd.concat([experiment_topics_df, pair_topic_df])
+                experiment_summary_df = pd.concat([experiment_summary_df, pair_summary_df], axis=0)
                 summary_df_subtopic = pd.concat([summary_df_subtopic, pair_topic_df])
-                summary_df = pd.concat([summary_df, pair_topic_df.drop(columns=["topic"]).groupby(by=["experiment", "dataset","mention_type"]).mean()], axis=0)
+                summary_df = pd.concat([summary_df, pair_summary_df], axis=0)
                 summary_df.to_csv(summary_folder / save_filename)
                 summary_df_subtopic.to_csv(summary_folder / save_filename_topics)
+
+        track_experiment_scores(tracker, config, experiment, experiment_summary_df, experiment_topics_df)
 
     summary_df.to_csv(summary_folder / save_filename)
     # save_filename_topics = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation_topics.csv'
