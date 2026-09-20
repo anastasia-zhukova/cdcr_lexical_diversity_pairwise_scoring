@@ -15,6 +15,9 @@ load_dotenv(PROJECT_ROOT / ".env")
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "")
 MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "cdcr_lexical_diversity_pairwise_scoring")
 MLFLOW_RUN_ID_KEY = "mlflow_run_id"
+# Log files written next to the console output: both logging systems of the project land in them
+LOG_FILE_FORMAT = "%(asctime)s | %(levelname)-8s | %(message)s"
+LOGURU_TO_STDLIB_FORMAT = "{name}:{function}:{line} - {message}"
 # Artifact directories of a run: one per pipeline step plus the captured log
 MLFLOW_LOG_ARTIFACT_DIR = "logs"
 MLFLOW_RUN_LOG_FILENAME = "run.log"
@@ -38,4 +41,5 @@ MAX_ALLOWED_BATCH_SIZE = 200
 CLUSTERING_THRESHOLD = 0.5
 EXCLUDE_SINGLETONS = True
 SCORE_ALL_EXPERIMENTS = True
-CONFIG_NAME = "test_random"
+# Experiment config used when a script is started without --config-name
+DEFAULT_CONFIG_NAME = "test_random"

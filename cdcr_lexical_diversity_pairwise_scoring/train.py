@@ -18,11 +18,11 @@ from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import Split
 from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
 from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, precision_recall_f1
-from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path, get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file
-from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path, get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file, get_experiment_name
+from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import LogFile
 from cdcr_lexical_diversity_pairwise_scoring.constants import (
     PROJECT_ROOT,
-    CONFIG_NAME,
+    DEFAULT_CONFIG_NAME,
     MLFLOW_EXPERIMENT_NAME,
     MLFLOW_RUN_ID_KEY,
     MLFLOW_TRACKING_URI,
@@ -206,16 +206,17 @@ def init_basic_training_resources(
     return train_feat, validation_feat, pairwise_model, "_".join(train_dataset.dataset_components), "_".join(dev_dataset.dataset_components)
 
 
-@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=DEFAULT_CONFIG_NAME)
 def main(config: Config):
     tracker = TrackerFactory.build(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
 
     with tracker.run(RunContext.from_hydra(config), run_id=None) as run_id:
-        train_and_save(config, tracker, run_id)
+        train_and_save(config, get_experiment_name(), tracker, run_id)
 
 
 def train_and_save(
     config: Config,
+    experiment_name: str,
     tracker: ExperimentTracker,
     run_id: str | None,
 ) -> None:
@@ -223,9 +224,9 @@ def train_and_save(
     dt_string = start_time.strftime("%d%m%Y_%H%M%S")
     output_folder = create_and_get_path("checkpoints/" + dt_string)
 
-    _model_file = output_folder / CONFIG_NAME
+    _model_file = output_folder / experiment_name
 
-    dataset_file_path = get_dataset_info_save_path()
+    dataset_file_path = get_dataset_info_save_path(experiment_name)
     _event_train_feat, _event_validation_feat, _pairwise_model, _train_names, _dev_names = init_basic_training_resources(
         dataset_config_file=dataset_file_path,
         hidden_size=config.hidden_size,
@@ -245,8 +246,8 @@ def train_and_save(
         + "_itr"
         + str(config.training_iterations)
     )
-    # TODO: replace with simple logger.
-    create_logger_with_fh(output_folder / ("train_" + log_params_str))
+    # everything logged from here on (loguru and stdlib) is also written next to the checkpoints
+    LogFile(output_folder / f"train_{log_params_str}.log").attach()
 
     # TODO: prettify
     logger.info(
@@ -289,7 +290,7 @@ def train_and_save(
         MLFLOW_RUN_ID_KEY: run_id,
     }
 
-    model_config_path = get_model_info_save_path()
+    model_config_path = get_model_info_save_path(experiment_name)
     with open(model_config_path, "w", encoding="utf-8") as file:
         json.dump(run_results, file)
 
