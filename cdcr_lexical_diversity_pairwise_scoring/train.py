@@ -20,7 +20,13 @@ from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromF
 from cdcr_lexical_diversity_pairwise_scoring.utils.eval_utils import get_confusion_matrix, precision_recall_f1
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import create_and_get_path, get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file
 from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import create_logger_with_fh
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME, MLFLOW_RUN_ID_KEY
+from cdcr_lexical_diversity_pairwise_scoring.constants import (
+    PROJECT_ROOT,
+    CONFIG_NAME,
+    MLFLOW_EXPERIMENT_NAME,
+    MLFLOW_RUN_ID_KEY,
+    MLFLOW_TRACKING_URI,
+)
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 from cdcr_lexical_diversity_pairwise_scoring.tracking import ExperimentTracker, RunContext, TrackerFactory
 
@@ -201,7 +207,7 @@ def init_basic_training_resources(
 
 @hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=CONFIG_NAME)
 def main(config: Config):
-    tracker = TrackerFactory.build()
+    tracker = TrackerFactory.build(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
 
     with tracker.run(RunContext.from_hydra(config), run_id=None) as run_id:
         train_and_save(config, tracker, run_id)

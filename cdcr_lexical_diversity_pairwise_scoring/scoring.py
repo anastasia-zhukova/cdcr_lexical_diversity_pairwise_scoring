@@ -8,7 +8,14 @@ import hydra
 import json
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
-from cdcr_lexical_diversity_pairwise_scoring.constants import PROJECT_ROOT, CONFIG_NAME, SCORE_ALL_EXPERIMENTS, MLFLOW_RUN_ID_KEY
+from cdcr_lexical_diversity_pairwise_scoring.constants import (
+    PROJECT_ROOT,
+    CONFIG_NAME,
+    SCORE_ALL_EXPERIMENTS,
+    MLFLOW_EXPERIMENT_NAME,
+    MLFLOW_RUN_ID_KEY,
+    MLFLOW_TRACKING_URI,
+)
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_info_save_path, get_conll_files_root_path, get_evaluation_result_path
 from helper_scripts.metrics import compute_metrics_from_assignments
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
@@ -170,7 +177,7 @@ def main(config: Config):
     """
     Computes CoNLL scores for the experiment that we want or for everything
     """
-    tracker = TrackerFactory.build()
+    tracker = TrackerFactory.build(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
     now_ = datetime.now()
     save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation.csv'
     save_filename_topics = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation_topics.csv'
