@@ -575,7 +575,9 @@ class uCDCRDataSet(DataSet):
         return embed_df, sim_df
 
     def _encode_tfidf(self, topic_id: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        texts, ids = [], []
+        # keyed by mention id like the other encoders: CD2CR and MEANTIME carry duplicate mention ids, and a
+        # duplicated index would make the .loc lookups of the pair sampling return frames instead of vectors
+        texts_dict = {}
 
         for m in self.topics.topics_dict[topic_id].mentions:
             tokens_clean = self._remove_stopwords(m.tokens_text)
@@ -585,15 +587,23 @@ class uCDCRDataSet(DataSet):
             if m.mention_head_lemma not in tokens_clean:
                 tokens_clean.append(m.mention_head_lemma)
 
-            texts.append(" ".join(tokens_clean))
-            ids.append(m.mention_id)
+            texts_dict[m.mention_id] = " ".join(tokens_clean)
+
+        ids = list(texts_dict)
+        texts = list(texts_dict.values())
 
         vectorizer = TfidfVectorizer(
             lowercase=True,
             stop_words="english",
         )
 
-        X = vectorizer.fit_transform(texts)
+        try:
+            X = vectorizer.fit_transform(texts)
+        except ValueError:
+            # nothing left after sklearn's own stop word list (e.g. a single mention "May"): no vectors, and the
+            # pair sampling then skips the topic
+            logger.warning(f"Topic {topic_id}: no tf-idf vocabulary left for its {len(ids)} mentions, skipping.")
+            return pd.DataFrame(), pd.DataFrame()
         embeddings = X.toarray()
         embed_df = pd.DataFrame(embeddings, index=ids, columns=vectorizer.get_feature_names_out())
         sim = cosine_similarity(embeddings)
