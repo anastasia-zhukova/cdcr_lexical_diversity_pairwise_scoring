@@ -206,10 +206,13 @@ dependencies = [
     { name = "loguru" },
     { name = "mlflow" },
     { name = "nltk" },
+    { name = "pandas" },
     { name = "pip" },
     { name = "python-dotenv" },
     { name = "scikit-learn" },
+    { name = "sentence-transformers" },
     { name = "spacy" },
+    { name = "staticvectors" },
     { name = "tables" },
     { name = "torch", version = "2.9.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.9.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'" },
@@ -230,10 +233,13 @@ requires-dist = [
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "mlflow", specifier = ">=3.12.0" },
     { name = "nltk", specifier = "==3.9.2" },
+    { name = "pandas", specifier = ">=3.0.6" },
     { name = "pip", specifier = ">=25.3" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "scikit-learn", specifier = "==1.8.0" },
+    { name = "sentence-transformers", specifier = ">=5.7.0" },
     { name = "spacy", specifier = "==3.8.11" },
+    { name = "staticvectors", specifier = ">=0.2.0" },
     { name = "tables", specifier = ">=3.11.1" },
     { name = "torch", marker = "sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'", specifier = "==2.9.1" },
     { name = "torch", marker = "sys_platform == 'darwin'", specifier = "==2.9.1", index = "https://download.pytorch.org/whl/cpu" },
@@ -1869,6 +1875,28 @@ wheels = [
 ]
 
 [[package]]
+name = "sentence-transformers"
+version = "5.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "tokenizers" },
+    { name = "torch", version = "2.9.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.9.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "torch", version = "2.9.1+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "tqdm" },
+    { name = "transformers" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9d/59/867381b1414a975da6c9953f48a07c05cb0629305e2d37c9bcc9764367b2/sentence_transformers-5.7.0.tar.gz", hash = "sha256:fd8c8fc35e6323631dff9f3760969ebf7980dc3cfda0ab1354bc6a774cc0e5d8", size = 466382, upload-time = "2026-08-06T12:12:33.371Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e8/c8/f63d99e354532f5b83e735dd1e001bda92495fbfde934f65d924abf2b071/sentence_transformers-5.7.0-py3-none-any.whl", hash = "sha256:b78141da3d8137e70d965866e2ca43190b9266f3d4d8752e250ded75e7136730", size = 611333, upload-time = "2026-08-06T12:12:31.881Z" },
+]
+
+[[package]]
 name = "setuptools"
 version = "80.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2035,6 +2063,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b5/b4/205b0d5241d934e8add0c38aa924c4f9fb7330834ff11e5444db964ec3f9/starlette-1.6.0.tar.gz", hash = "sha256:d4e3ac5e546444960c710297a3c9fc3f7ebae1b7e963f3d36173b49da535be9b", size = 2716969, upload-time = "2026-08-08T18:27:57.512Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/cb/6a6a47d5b464bd08695d254f3da6e7986cc70c9fa5d778eda57538edfe56/starlette-1.6.0-py3-none-any.whl", hash = "sha256:a86dd39d14bb45f85a3d18525215a9ef0cfd1f192ac793220e72598c90335f0c", size = 75969, upload-time = "2026-08-08T18:27:56.196Z" },
+]
+
+[[package]]
+name = "staticvectors"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "safetensors" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/75/ca/8530a45deee3b60217ab64f05eef6e22babe7bd0dcebacf9cc7f3f8542a4/staticvectors-0.2.0.tar.gz", hash = "sha256:8b8a558d861b39e5c4d543dff3d55573dcbd0c00c5a44b5771a5605d5799b5b7", size = 22961, upload-time = "2025-01-27T15:28:21.494Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/67/bd/d7352d8c7e13c5117394cd621ba5a8552503c3e45f43147cfc1e6aba02c4/staticvectors-0.2.0-py3-none-any.whl", hash = "sha256:eee5ad9053d72604ccd0a4039193b882f4fad5d5621d51190e028cd44aa51ca2", size = 26611, upload-time = "2025-01-27T15:28:19.932Z" },
 ]
 
 [[package]]
