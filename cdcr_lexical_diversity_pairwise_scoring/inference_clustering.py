@@ -120,12 +120,9 @@ def predict_and_cluster(
 
                 # correctly reshape mentions now
                 used_mention_ids = list(set(chain.from_iterable([[pair[0].mention_id, pair[1].mention_id] for pair in all_pairs])))
-                sim_df = pd.DataFrame(np.zeros((len(used_mention_ids), len(used_mention_ids))), index=used_mention_ids, columns=used_mention_ids)
-                for i, pair in enumerate(all_pairs):
-                    sim_df.loc[pair[0].mention_id, pair[1].mention_id] = all_scores[i]
-                    sim_df.loc[pair[1].mention_id, pair[0].mention_id] = all_scores[i]
+                similarity_matrix = build_similarity_matrix(all_pairs, all_scores, used_mention_ids)
 
-                clustering = agl_clust.fit(sim_df.values)
+                clustering = agl_clust.fit(similarity_matrix)
                 true_clusters = [mention_topic_dict[m_id].coref_chain for m_id in used_mention_ids]
                 predicted_clusters = [str(v) for v in clustering.labels_]
                 end = datetime.now()
@@ -171,6 +168,25 @@ def predict_and_cluster(
         },
         step=None,
     )
+
+
+def build_similarity_matrix(all_pairs: list, all_scores: List[float], mention_ids: list[str]) -> np.ndarray:
+    """
+    The symmetric (mention x mention) matrix of pair scores, rows and columns in the order of `mention_ids`.
+
+    Cells of pairs that were not scored stay 0; a pair scored several times keeps its last score. Filled with
+    one indexed assignment instead of a pandas .loc per pair: the single-topic datasets (NiDENT, NP4E,
+    NewsWCL50) have millions of pairs, and the per-pair lookups took minutes per topic.
+    """
+    positions = {mention_id: position for position, mention_id in enumerate(mention_ids)}
+    rows = np.fromiter((positions[pair[0].mention_id] for pair in all_pairs), dtype=np.int64, count=len(all_pairs))
+    columns = np.fromiter((positions[pair[1].mention_id] for pair in all_pairs), dtype=np.int64, count=len(all_pairs))
+    scores = np.asarray(all_scores, dtype=np.float64)
+
+    # both cells of a pair are written one after the other, in pair order, exactly like a loop would
+    similarity_matrix = np.zeros((len(mention_ids), len(mention_ids)))
+    similarity_matrix[np.column_stack([rows, columns]).ravel(), np.column_stack([columns, rows]).ravel()] = np.repeat(scores, 2)
+    return similarity_matrix
 
 
 def score_mention_pairs(model: PairwiseModelKenton, all_pairs: list) -> List[float]:
