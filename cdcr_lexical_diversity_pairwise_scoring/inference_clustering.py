@@ -146,7 +146,8 @@ def predict_and_cluster(
                 for i, m_id in enumerate(used_mention_ids):
                     m = mention_topic_dict[m_id]
                     m_save = {k: v for k, v in dict(m.__dict__).items() if k in ["mention_id", "tokens_str", "coref_chain", "topic", "subtopic", "doc", "topic_id",  "subtopic_id", "doc_id", "dataset", "mention_context", "tokens_number_context"]}
-                    m_save["predicted_coref_chain"] = f"{dataset}_{topic_id}_{predicted_clusters[i]}"
+                    # topic_id already carries the dataset name
+                    m_save["predicted_coref_chain"] = f"{topic_id}_{predicted_clusters[i]}"
                     experiment_results_dict[dataset][topic_id][pairs_type].append(m_save)
 
             # with open(cached_path, "wb") as file:
