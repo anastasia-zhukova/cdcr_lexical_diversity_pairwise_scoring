@@ -19,6 +19,7 @@ from string import punctuation
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import Topic, ScopeConfig, Topics
+from cdcr_lexical_diversity_pairwise_scoring.utils.mention_vector_cache import MentionVectorCache
 from cdcr_lexical_diversity_pairwise_scoring.constants import *
 
 import warnings
@@ -405,6 +406,9 @@ class uCDCRDataSet(DataSet):
         shuffled_clusters = dict(shuffled_topics)
         next_report_milestone = 0.1
 
+        # one cache for the whole split: read once, written every VECTOR_CACHE_SAVE_EVERY new vectors and at the end
+        vector_cache = self._mention_vector_cache()
+
         # for topic_id, predictions_json in self.topics.topic_clusters.items():
         for topic_id, clusters in shuffled_clusters.items():
             dataset = self.topics.topics_to_datasets[topic_id]
@@ -416,7 +420,9 @@ class uCDCRDataSet(DataSet):
             shuffled_clusters = dict(shuffled_clusters)
 
             logger.info(f"Encoding topic {topic_id} of {dataset}.")
-            topic_embed_df, sim_df = self.encode_mentions(topic_id)
+            topic_embed_df, sim_df = self.encode_mentions(topic_id, vector_cache)
+            if vector_cache is not None:
+                vector_cache.save_if_due(VECTOR_CACHE_SAVE_EVERY)
             mentions_topic_dict = {m.mention_id: m for m in self.topics.topics_dict[topic_id].mentions}
 
             for c_id, mentions in shuffled_clusters.items():
@@ -528,6 +534,9 @@ class uCDCRDataSet(DataSet):
             logger.info(
                 f"Collected at least {used_up_n[dataset]} of the {positive_n_max_dataset} positive pairs for {dataset} (negative ratio 1:{ratio}). Last topic {topic_id}.")
 
+        if vector_cache is not None:
+            vector_cache.save()
+
         self.total_types = {}
         for dataset, clusters_per_dataset in all_mention_pairs.items():
             self.total_types[dataset] = {"pos_easy": 0, "pos_hard": 0, "neg_easy": 0, "neg_hard": 0}
@@ -566,15 +575,28 @@ class uCDCRDataSet(DataSet):
 
         return [(mention_dict[m_target_id], mention_dict[m_id]) for m_id in used_ids]
 
-    def encode_mentions(self, topic_id: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def _mention_vector_cache(self) -> MentionVectorCache | None:
+        """
+        The persistent vectors of the pair strategy, shared across experiments; None for strategies that
+        compute their vectors per topic (tf-idf).
+        """
+        if self.type_of_pairs == MentionPairStrategy.embedding:
+            model_name = EMBEDDING
+        elif self.type_of_pairs == MentionPairStrategy.encoder:
+            model_name = SENT_TRANSFOMER
+        else:
+            return None
+        return MentionVectorCache(PROJECT_ROOT / "experiment_cache_results" / f"{model_name.replace('/', '_')}.h5")
+
+    def encode_mentions(self, topic_id: str, vector_cache: MentionVectorCache | None) -> Tuple[pd.DataFrame, pd.DataFrame]:
         if self.type_of_pairs == MentionPairStrategy.tfidf:
             embed_df, sim_df = self._encode_tfidf(topic_id)
 
         elif self.type_of_pairs == MentionPairStrategy.embedding:
-            embed_df, sim_df = self._encode_embeddings(topic_id)
+            embed_df, sim_df = self._encode_embeddings(topic_id, vector_cache)
 
         elif self.type_of_pairs == MentionPairStrategy.encoder:
-            embed_df, sim_df = self._encode_sentence_transformer(topic_id)
+            embed_df, sim_df = self._encode_sentence_transformer(topic_id, vector_cache)
         else:
             raise NotImplementedError(f"A method for the mention pair creation {self.type_of_pairs} is not implemented.")
         return embed_df, sim_df
@@ -615,13 +637,8 @@ class uCDCRDataSet(DataSet):
         sim_df = pd.DataFrame(sim, index=ids, columns=ids)
         return embed_df, sim_df
 
-    def _encode_embeddings(self, topic_id: str)-> Tuple[pd.DataFrame, pd.DataFrame]:
+    def _encode_embeddings(self, topic_id: str, vector_cache: MentionVectorCache) -> Tuple[pd.DataFrame, pd.DataFrame]:
         texts_dict, heads_dict = {}, {}
-        cached_path = PROJECT_ROOT / "experiment_cache_results" / f"{EMBEDDING.replace('/', '_')}.h5"
-        if cached_path.exists():
-            existing_embed_df = pd.read_hdf(cached_path, key="df")
-        else:
-            existing_embed_df = pd.DataFrame()
 
         for m in self.topics.topics_dict[topic_id].mentions:
             tokens_clean = self._remove_stopwords(m.tokens_text)
@@ -630,25 +647,12 @@ class uCDCRDataSet(DataSet):
             texts_dict[m.mention_id] = tokens_clean
             heads_dict[m.mention_id] = m.mention_head
 
-        mentions_to_index = list(set(texts_dict) - set(existing_embed_df.index.to_list()))
-        texts_dict_to_use = {m: texts_dict[m] for m in mentions_to_index}
+        mentions_to_index = vector_cache.missing(texts_dict)
+        if mentions_to_index:
+            embeddings = [self._encode_sentence(texts_dict[m_id], heads_dict[m_id]) for m_id in mentions_to_index]
+            vector_cache.add(pd.DataFrame(np.vstack(embeddings), index=mentions_to_index))
 
-        embeddings = list()
-        for m_id, tokens in texts_dict_to_use.items():
-            vector = self._encode_sentence(tokens, heads_dict[m_id])
-            embeddings.append(vector)
-
-        embeddings = np.vstack(embeddings)
-        new_embed_df = pd.DataFrame(embeddings, index=mentions_to_index)
-        embed_df = pd.concat([existing_embed_df, new_embed_df])
-
-        embed_df.to_hdf(
-            cached_path,
-            key="df",
-            mode="w"  # "w" = overwrite, "a" = append
-        )
-
-        topic_embed_df = embed_df.loc[list(texts_dict)]
+        topic_embed_df = vector_cache.get(list(texts_dict))
         sim = cosine_similarity(topic_embed_df.values)
 
         sim_df = pd.DataFrame(sim, index=topic_embed_df.index, columns=topic_embed_df.index)
@@ -681,39 +685,24 @@ class uCDCRDataSet(DataSet):
         return embedding.astype(np.float32)
 
 
-    def _encode_sentence_transformer(self, topic_id: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        model = get_sent_transformer_model(SENT_TRANSFOMER)
-        cached_path = PROJECT_ROOT / "experiment_cache_results" / f"{SENT_TRANSFOMER.replace('/', '_')}.h5"
-        if cached_path.exists():
-            existing_embed_df = pd.read_hdf(cached_path, key="df")
-        else:
-            existing_embed_df = pd.DataFrame()
-
+    def _encode_sentence_transformer(self, topic_id: str, vector_cache: MentionVectorCache) -> Tuple[pd.DataFrame, pd.DataFrame]:
         texts_dict = {}
         for m in self.topics.topics_dict[topic_id].mentions:
             texts_dict[m.mention_id] = m.tokens_str
 
-        mentions_to_index = list( set(texts_dict) - set(existing_embed_df.index.to_list()))
-        texts = [texts_dict[m] for m in mentions_to_index]
+        mentions_to_index = vector_cache.missing(texts_dict)
+        if mentions_to_index:
+            model = get_sent_transformer_model(SENT_TRANSFOMER)
+            embeddings = model.encode(
+                [texts_dict[m] for m in mentions_to_index],
+                batch_size=ENCODE_BATCH,
+                convert_to_numpy=True,
+                show_progress_bar=True,
+                normalize_embeddings=True,
+            )
+            vector_cache.add(pd.DataFrame(embeddings, index=mentions_to_index))
 
-        embeddings = model.encode(
-            texts,
-            batch_size=ENCODE_BATCH,
-            convert_to_numpy=True,
-            show_progress_bar=True,
-            normalize_embeddings=True,
-        )
-        new_embed_df = pd.DataFrame(embeddings, index=mentions_to_index)
-
-        embed_df = pd.concat([existing_embed_df, new_embed_df])
-
-        embed_df.to_hdf(
-            cached_path,
-            key="df",
-            mode="w"  # "w" = overwrite, "a" = append
-        )
-
-        topic_embed_df = embed_df.loc[list(texts_dict)]
+        topic_embed_df = vector_cache.get(list(texts_dict))
         sim = cosine_similarity(topic_embed_df.values)
 
         sim_df = pd.DataFrame(sim, index=topic_embed_df.index, columns=topic_embed_df.index)

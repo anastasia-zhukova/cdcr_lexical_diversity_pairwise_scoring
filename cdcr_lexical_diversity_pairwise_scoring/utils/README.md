@@ -12,6 +12,10 @@ Helpers shared by the pipeline scripts.
   (never a view into the context), each file holds only its own dataset's mentions and is written once
   per dataset; mentions already present in a file are reused and never re-encoded. Use it whenever
   something has to be embedded before training or inference.
+- `mention_vector_cache.py` — `MentionVectorCache`: the mention vectors of the contrastive pair sampling
+  (fastText or sentence-transformer, one `experiment_cache_results/<model>.h5` per model, shared by all
+  experiments). Read once per split, extended in memory, and written back in batches of
+  `VECTOR_CACHE_SAVE_EVERY` new vectors and at the end of the split, atomically.
 - `io_utils.py` — the paths of the experiment cache (`experiment_cache_results/<experiment>/...`) and the
   writers of the CoNLL key/response files.
 - `eval_utils.py` — confusion matrix and precision/recall/F1 for the pairwise dev evaluation.
