@@ -188,8 +188,8 @@ def filter_and_update_mention_attributes(mentions, dataset_name: str):
     """
     Ensure that the keys will remain unique across the datasets
     """
-    mentions_new = []
-    mention_ids = []
+    mention_dict = {}
+    copy_dict = {}
     for m in mentions:
         if dataset_name in ALLOWED_TOPICS:
             if m["topic"] not in ALLOWED_TOPICS[dataset_name]:
@@ -200,9 +200,14 @@ def filter_and_update_mention_attributes(mentions, dataset_name: str):
         m["coref_chain"] = f"{dataset_name}_{m['topic_id']}_{m['coref_chain']}"
         # m["subtopic_id"] = f"{dataset_name}_{m['subtopic_id']}"
         # m["topic_id"] = f"{dataset_name}_{m['topic_id']}"
-        mentions_new.append(m)
-        mention_ids.append(m["mention_id"])
-    return mentions_new, mention_ids
+        if m["mention_id"] in mention_dict:
+            copy_dict[m["mention_id"]] = copy_dict.get(m["mention_id"], 0) + 1
+            m_id = f"{m["mention_id"]}_duplicate{copy_dict[m["mention_id"]]}"
+            m["mention_id"] = m_id
+        else:
+            m_id = m["mention_id"]
+        mention_dict[m_id] = m
+    return list(mention_dict.values()), list(mention_dict.keys())
 
 
 def read_mention_files(dataset_path: Path, dataset_name: str) -> Tuple[list, list, list, list]:
