@@ -30,6 +30,8 @@ DEFAULT_DEV = 8000
 SENT_TRANSFOMER = "intfloat/multilingual-e5-large-instruct"
 EMBEDDING =  "neuml/fasttext"
 ENCODE_BATCH = 8
+# new vectors of the contrastive pair sampling are written to their .h5 cache in batches of this size
+VECTOR_CACHE_SAVE_EVERY = 5000
 ALLOWED_TOPICS = {
     # "WECEng": ["Meetings", "Civilian Attack", "Airliner Accident", "Earthquake", "News Event", "Terrorist Attack", "Wildfire", "Flood", "Weapons Test", "Eruption", "Oilspill", "Rail Accident"],
     # # "HyperCoref": ["gma", "international", "politics", "business", "blotter", "health", "us", "abc_univision", "thetorldnewser", 'thelaw']
