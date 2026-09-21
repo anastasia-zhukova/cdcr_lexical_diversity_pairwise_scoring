@@ -187,7 +187,11 @@ class DataSet:
 
 def filter_and_update_mention_attributes(mentions, dataset_name: str):
     """
-    Ensure that the keys will remain unique across the datasets
+    Ensure that the keys will remain unique across the datasets.
+
+    Topic and subtopic ids are only unique within their own dataset (ECBplus and ECBplusMETAm share all
+    subtopic ids, CD2CR/NewsWCL50 and NiDENT/NP4E some), so they are namespaced with the dataset name: when
+    several datasets are loaded into one split, their topics would otherwise be merged into one.
     """
     mention_dict = {}
     copy_dict = {}
@@ -199,8 +203,8 @@ def filter_and_update_mention_attributes(mentions, dataset_name: str):
         # m["mention_id"] = f"{dataset_name}_{m['topic_id']}_{m['subtopic_id']}_{m['mention_id']}"
         m["dataset"] = dataset_name
         m["coref_chain"] = f"{dataset_name}_{m['topic_id']}_{m['coref_chain']}"
-        # m["subtopic_id"] = f"{dataset_name}_{m['subtopic_id']}"
-        # m["topic_id"] = f"{dataset_name}_{m['topic_id']}"
+        m["subtopic_id"] = f"{dataset_name}_{m['subtopic_id']}"
+        m["topic_id"] = f"{dataset_name}_{m['topic_id']}"
         if m["mention_id"] in mention_dict:
             copy_dict[m["mention_id"]] = copy_dict.get(m["mention_id"], 0) + 1
             m_id = f"{m["mention_id"]}_duplicate{copy_dict[m["mention_id"]]}"
