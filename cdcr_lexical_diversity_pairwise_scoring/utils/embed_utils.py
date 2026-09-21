@@ -10,6 +10,14 @@ from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.mention_data import MentionuCDCR
 
 
+# Penn Treebank quote tokens, used by some mention annotations while their contexts keep the plain quote
+PTB_QUOTES = {"``": '"', "''": '"'}
+
+
+def _normalised_text(tokens: list[str]) -> str:
+    return "".join(PTB_QUOTES.get(token, token) for token in tokens)
+
+
 @dataclass
 class TensorBuildOutput:
     mention_id_to_tensor_id_mapping: dict[str, int]
@@ -26,7 +34,7 @@ class EmbedTransformersGenerics:
         bert_model_name: str,
         max_surrounding_context: int = -1,
         finetune: bool = False,
-        use_cuda: bool = True
+        use_cuda: bool = True,
     ):
 
         self.max_surrounding_context = max_surrounding_context
@@ -56,7 +64,15 @@ class EmbedTransformersGenerics:
         return mention_hidden_span, mention_hidden_span[0], mention_hidden_span[-1], mention_hidden_span.shape[0]
 
     @staticmethod
-    def extract_mention_surrounding_context(mention: MentionuCDCR):
+    def extract_mention_surrounding_context(mention: MentionuCDCR) -> tuple[list[str], list[str], list[str]]:
+        """Split the mention context into (before, mention, after) token lists.
+
+        The mention span is taken from the context at `tokens_number_context`. Some datasets tokenise the
+        mention and its context differently (e.g. MEANTIME keeps "EADS-led" as one mention token while the
+        context has "EADS", "-", "led", or glues the next token on: "AT&T" vs "AT&T."): the span is then
+        accepted as long as it starts with the mention text, since the context tokens are what gets encoded
+        anyway.
+        """
         tokens_indexes = mention.tokens_number_context
         context = mention.mention_context
         start_mention_index = tokens_indexes[0]
@@ -67,7 +83,16 @@ class EmbedTransformersGenerics:
         ret_mention = context[start_mention_index:end_mention_index]
         ret_context_after = context[end_mention_index:]
 
-        assert ret_mention == mention.tokens_text
+        if ret_mention != mention.tokens_text:
+            if not _normalised_text(ret_mention).startswith(_normalised_text(mention.tokens_text)):
+                raise ValueError(
+                    f"Mention {mention.mention_id}: the context span {ret_mention} "
+                    f"does not match the mention tokens {mention.tokens_text}.",
+                )
+            logger.warning(
+                f"Mention {mention.mention_id} is tokenised differently from its context "
+                f"({mention.tokens_text} vs {ret_mention}); using the context tokens.",
+            )
         assert ret_context_before + ret_mention + ret_context_after == mention.mention_context
 
         return ret_context_before, ret_mention, ret_context_after
@@ -95,12 +120,44 @@ class EmbedTransformersGenerics:
                 context_after = context_after[: self.max_surrounding_context - 1]
 
         mention_span = self.tokenizer.encode(" ".join(mention_span_str), add_special_tokens=False)
+        context_before, context_after = self._fit_context_to_model(mention, context_before, mention_span, context_after)
 
         all_context_tokens = [[self.tokenizer.cls_token_id] + context_before + mention_span + context_after + [self.tokenizer.sep_token_id]]
         all_context_tokens = torch.tensor(all_context_tokens)
         mention_start_index = len(context_before) + 1
         mention_end_index = len(context_before) + len(mention_span) + 1
         return all_context_tokens, mention_start_index, mention_end_index
+
+    def _fit_context_to_model(
+        self,
+        mention: MentionuCDCR,
+        context_before: list[int],
+        mention_span: list[int],
+        context_after: list[int],
+    ) -> tuple[list[int], list[int]]:
+        """Clip the context so that [CLS] + before + mention + after + [SEP] fits into the model's input size.
+
+        Contexts within the limit are returned untouched. Longer ones (e.g. CEREC, up to 700 tokens against
+        RoBERTa's 512) keep a window centred on the mention: the budget is split evenly between the two sides
+        and whatever one side does not use goes to the other.
+        """
+        budget = self.tokenizer.model_max_length - 2 - len(mention_span)
+        if budget < 0:
+            raise ValueError(
+                f"Mention {mention.mention_id} is {len(mention_span)} tokens long, "
+                f"more than the model can take ({self.tokenizer.model_max_length}).",
+            )
+        if len(context_before) + len(context_after) <= budget:
+            return context_before, context_after
+
+        keep_before = min(len(context_before), budget // 2)
+        keep_after = min(len(context_after), budget - keep_before)
+        keep_before = min(len(context_before), budget - keep_after)
+        logger.debug(
+            f"Mention {mention.mention_id}: context of "
+            f"{len(context_before) + len(context_after)} tokens clipped to {keep_before + keep_after}.",
+        )
+        return context_before[len(context_before) - keep_before :], context_after[:keep_after]
 
     @property
     def get_embed_size(self):
