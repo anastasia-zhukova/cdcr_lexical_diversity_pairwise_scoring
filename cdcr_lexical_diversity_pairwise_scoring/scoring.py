@@ -185,14 +185,15 @@ def main(config: Config):
     results_folder = PROJECT_ROOT / "experiment_cache_results"
 
     if SCORE_ALL_EXPERIMENTS:
-        experiment_target = [item.name for item in results_folder.iterdir() if item.is_dir()]
+        experiment_target = [item.name for item in sorted(results_folder.iterdir()) if item.is_dir()]
     else:
         experiment_target = [get_experiment_name()]
 
     summary_df = pd.DataFrame()
     summary_df_subtopic = pd.DataFrame()
 
-    for experiment_path in results_folder.iterdir():
+    # sorted: the row order of the CSVs then does not depend on the file system
+    for experiment_path in sorted(results_folder.iterdir()):
         experiment = experiment_path.name
 
         if experiment not in experiment_target:
@@ -204,14 +205,14 @@ def main(config: Config):
 
         conll_path = get_conll_files_root_path(experiment)
 
-        for dataset_path in conll_path.iterdir():
+        for dataset_path in sorted(conll_path.iterdir()):
             dataset = dataset_path.name
 
-            for pair_type_path in dataset_path.iterdir():
+            for pair_type_path in sorted(dataset_path.iterdir()):
                 pair_type = pair_type_path.name
                 pair_topic_df = pd.DataFrame()
 
-                for topic_path in pair_type_path.iterdir():
+                for topic_path in sorted(pair_type_path.iterdir()):
                     topic = topic_path.name
 
                     summary_dict = {
