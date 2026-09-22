@@ -40,6 +40,9 @@ ALLOWED_TOPICS = {
 MIN_STD = 0.03
 DENOM_DELTA = 4
 MAX_ALLOWED_BATCH_SIZE = 200
+# pairs per batch of the dev evaluation during training; each pair is padded to the batch's longest mention, so
+# 10000 pairs of long mentions (CD2CR) exhausted a 16 GB GPU while the batch size does not change the metrics
+DEV_EVAL_BATCH_SIZE = 1000
 CLUSTERING_THRESHOLD = 0.5
 EXCLUDE_SINGLETONS = True
 SCORE_ALL_EXPERIMENTS = True
