@@ -7,7 +7,8 @@
 #   make all                       every step, each swept over every config before the next step starts
 #   make pipeline CONFIG=single-random-cd2cr      all five steps for one config
 #   make embed CONFIGS="single-random-cd2cr single-random-gvc"   restrict a sweep
-#   make gen-pairs CONFIGS="$(make list-configs | grep ^single)" e.g. one family only
+#   make train GROUP=single-random   one config family: single-random, single-contrast_tfidf,
+#                                    single-contrast_encoder or mix-contrast_encoder
 #
 # A failing config does not stop the sweep: the remaining configs still run and the failures are
 # listed at the end (the target then exits non-zero). Each run's output is kept in
@@ -23,6 +24,10 @@ LOG_DIR     ?= sweep_logs
 MEMORY_MAX  ?= 12G
 ALL_CONFIGS := $(sort $(notdir $(basename $(wildcard $(CONFIG_DIR)/*.yaml))))
 CONFIGS     ?= $(filter-out test_%,$(ALL_CONFIGS))
+GROUP       ?=
+ifneq ($(strip $(GROUP)),)
+CONFIGS     := $(filter $(GROUP)-%,$(CONFIGS))
+endif
 
 # Pair sampling and the order of the CoNLL output go through Python sets: pinning the hash seed makes
 # a sweep reproducible run to run. Override with PYTHONHASHSEED=random to get the interpreter default.
@@ -46,7 +51,7 @@ endif
 .PHONY: help all pipeline list-configs $(STEPS)
 
 help:
-	@sed -n '1,18p' $(MAKEFILE_LIST) | sed 's/^# \{0,1\}//'
+	@sed -n '1,19p' $(MAKEFILE_LIST) | sed 's/^# \{0,1\}//'
 
 list-configs:
 	@printf '%s\n' $(CONFIGS)
