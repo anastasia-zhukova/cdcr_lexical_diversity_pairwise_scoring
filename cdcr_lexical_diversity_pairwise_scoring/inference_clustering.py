@@ -34,15 +34,26 @@ from cdcr_lexical_diversity_pairwise_scoring.constants import (
     PROJECT_ROOT,
     CLUSTERING_THRESHOLD,
     DEFAULT_CONFIG_NAME,
+    KEYCLOAK_CLIENT_ID,
+    KEYCLOAK_CLIENT_SECRET,
+    KEYCLOAK_TOKEN_REFRESH_MARGIN_SECONDS,
+    KEYCLOAK_TOKEN_REQUEST_TIMEOUT_SECONDS,
+    KEYCLOAK_TOKEN_URL,
     MLFLOW_EXPERIMENT_NAME,
     MLFLOW_INFERENCE_ARTIFACT_DIR,
     MLFLOW_RUN_ID_KEY,
     MLFLOW_TRACKING_URI,
+    MLFLOW_TRACKING_USERNAME,
 )
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file, get_predicted_cluster_path, get_conll_files_root_path, get_evaluation_result_path, get_experiment_name
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet, EvalPairsType
-from cdcr_lexical_diversity_pairwise_scoring.tracking import ExperimentTracker, RunContext, TrackerFactory
+from cdcr_lexical_diversity_pairwise_scoring.tracking import (
+    AuthorizationFactory,
+    ExperimentTracker,
+    RunContext,
+    TrackerFactory,
+)
 
 torch.serialization.add_safe_globals([PairwiseModelKenton, torch.nn.modules.linear.Linear, torch.nn.modules.container.Sequential, torch.nn.modules.activation.ReLU, EmbedFromFile, pathlib.WindowsPath, pathlib.PosixPath])
 
@@ -215,7 +226,19 @@ def main(config: Config):
         model_config = json.load(file)
 
     # attach the inference results to the training run of this experiment
-    tracker = TrackerFactory.build(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
+    authorization = AuthorizationFactory.build(
+        token_url=KEYCLOAK_TOKEN_URL,
+        client_id=KEYCLOAK_CLIENT_ID,
+        client_secret=KEYCLOAK_CLIENT_SECRET,
+        basic_auth_username=MLFLOW_TRACKING_USERNAME,
+        refresh_margin_seconds=KEYCLOAK_TOKEN_REFRESH_MARGIN_SECONDS,
+        request_timeout_seconds=KEYCLOAK_TOKEN_REQUEST_TIMEOUT_SECONDS,
+    )
+    tracker = TrackerFactory.build(
+        tracking_uri=MLFLOW_TRACKING_URI,
+        experiment_name=MLFLOW_EXPERIMENT_NAME,
+        authorization=authorization,
+    )
     with tracker.run(RunContext.from_hydra(config), run_id=model_config.get(MLFLOW_RUN_ID_KEY)):
         infer_and_cluster(config, experiment_name, model_config, tracker)
 

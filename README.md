@@ -19,7 +19,8 @@ Specifically we used the following news datasets:
 
 ### Experiment tracking (MLflow)
 Runs are tracked in MLflow when a tracking server is configured. Copy `.env.example` to `.env` and fill in
-`MLFLOW_TRACKING_URI`, `MLFLOW_TRACKING_USERNAME`, `MLFLOW_TRACKING_PASSWORD` and (optionally) `MLFLOW_EXPERIMENT_NAME`.
+`MLFLOW_TRACKING_URI`, the Keycloak client (`KEYCLOAK_TOKEN_URL`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`)
+and (optionally) `MLFLOW_EXPERIMENT_NAME`.
 Leaving `MLFLOW_TRACKING_URI` empty disables tracking; the pipeline behaves exactly as before.
 
 One MLflow run corresponds to one experiment config and is named after it (e.g. `single-random-cd2cr`):

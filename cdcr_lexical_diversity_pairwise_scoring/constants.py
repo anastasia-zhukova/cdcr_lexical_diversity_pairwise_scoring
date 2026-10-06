@@ -15,6 +15,16 @@ load_dotenv(PROJECT_ROOT / ".env")
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "")
 MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "cdcr_lexical_diversity_pairwise_scoring")
 MLFLOW_RUN_ID_KEY = "mlflow_run_id"
+# Read only to refuse a setup with both basic auth and Keycloak: MLflow itself takes it from the environment
+MLFLOW_TRACKING_USERNAME = os.environ.get("MLFLOW_TRACKING_USERNAME", "")
+# Keycloak service-account client authorizing against a tracking server behind oauth2-proxy;
+# an empty/unset client id means no Keycloak authorization
+KEYCLOAK_TOKEN_URL = os.environ.get("KEYCLOAK_TOKEN_URL", "")
+KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "")
+KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
+# A token is renewed once it is this close to its expiry (Keycloak issues 5-minute tokens)
+KEYCLOAK_TOKEN_REFRESH_MARGIN_SECONDS = 60
+KEYCLOAK_TOKEN_REQUEST_TIMEOUT_SECONDS = 10
 # Log files written next to the console output: both logging systems of the project land in them
 LOG_FILE_FORMAT = "%(asctime)s | %(levelname)-8s | %(message)s"
 LOGURU_TO_STDLIB_FORMAT = "{name}:{function}:{line} - {message}"

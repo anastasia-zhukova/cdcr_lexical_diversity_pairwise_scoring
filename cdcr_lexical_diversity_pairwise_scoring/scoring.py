@@ -12,15 +12,26 @@ from cdcr_lexical_diversity_pairwise_scoring.constants import (
     PROJECT_ROOT,
     DEFAULT_CONFIG_NAME,
     SCORE_ALL_EXPERIMENTS,
+    KEYCLOAK_CLIENT_ID,
+    KEYCLOAK_CLIENT_SECRET,
+    KEYCLOAK_TOKEN_REFRESH_MARGIN_SECONDS,
+    KEYCLOAK_TOKEN_REQUEST_TIMEOUT_SECONDS,
+    KEYCLOAK_TOKEN_URL,
     MLFLOW_EXPERIMENT_NAME,
     MLFLOW_RUN_ID_KEY,
     MLFLOW_SCORING_ARTIFACT_DIR,
     MLFLOW_TRACKING_URI,
+    MLFLOW_TRACKING_USERNAME,
 )
 from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_model_info_save_path, get_conll_files_root_path, get_evaluation_result_path, get_experiment_name
 from helper_scripts.metrics import compute_metrics_from_assignments
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
-from cdcr_lexical_diversity_pairwise_scoring.tracking import ExperimentTracker, RunContext, TrackerFactory
+from cdcr_lexical_diversity_pairwise_scoring.tracking import (
+    AuthorizationFactory,
+    ExperimentTracker,
+    RunContext,
+    TrackerFactory,
+)
 
 MUC = "_MUC"
 B3 = "_B3"
@@ -177,7 +188,19 @@ def main(config: Config):
     """
     Computes CoNLL scores for the experiment that we want or for everything
     """
-    tracker = TrackerFactory.build(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
+    authorization = AuthorizationFactory.build(
+        token_url=KEYCLOAK_TOKEN_URL,
+        client_id=KEYCLOAK_CLIENT_ID,
+        client_secret=KEYCLOAK_CLIENT_SECRET,
+        basic_auth_username=MLFLOW_TRACKING_USERNAME,
+        refresh_margin_seconds=KEYCLOAK_TOKEN_REFRESH_MARGIN_SECONDS,
+        request_timeout_seconds=KEYCLOAK_TOKEN_REQUEST_TIMEOUT_SECONDS,
+    )
+    tracker = TrackerFactory.build(
+        tracking_uri=MLFLOW_TRACKING_URI,
+        experiment_name=MLFLOW_EXPERIMENT_NAME,
+        authorization=authorization,
+    )
     now_ = datetime.now()
     save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation.csv'
     save_filename_topics = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_conll_evaluation_topics.csv'
