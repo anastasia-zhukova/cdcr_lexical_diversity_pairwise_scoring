@@ -10,6 +10,7 @@ import mlflow
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.constants import MLFLOW_LOG_ARTIFACT_DIR, MLFLOW_RUN_LOG_EXTENSION
+from cdcr_lexical_diversity_pairwise_scoring.tracking.authorization import TrackingAuthorization
 from cdcr_lexical_diversity_pairwise_scoring.tracking.run_context import RunContext
 
 # Both logging systems of the project (loguru in the scripts, stdlib logging in `dataobjs`)
@@ -123,16 +124,18 @@ class NoOpTracker(ExperimentTracker):
 class MLflowTracker(ExperimentTracker):
     """Thin OOP wrapper over the MLflow client.
 
-    Owns the tracking URI and the experiment name. Basic-auth credentials are read by the
-    MLflow client directly from MLFLOW_TRACKING_USERNAME / MLFLOW_TRACKING_PASSWORD.
+    Owns the tracking URI and the experiment name. `authorization` is applied right before every
+    request to the server, so short-lived credentials stay valid through a run that takes hours.
     """
 
     def __init__(
         self,
         tracking_uri: str,
         experiment_name: str,
+        authorization: TrackingAuthorization,
     ) -> None:
         self._experiment_name = experiment_name
+        self._authorization = authorization
         self._run_id: str | None = None
         mlflow.set_tracking_uri(tracking_uri)
         logger.debug(f"MLflow tracker configured for {tracking_uri} (experiment '{experiment_name}').")
@@ -147,6 +150,7 @@ class MLflowTracker(ExperimentTracker):
         context: RunContext,
         run_id: str | None,
     ) -> Iterator[str | None]:
+        self._authorization.apply()
         mlflow.set_experiment(self._experiment_name)
         resumed = run_id is not None
 
@@ -154,25 +158,31 @@ class MLflowTracker(ExperimentTracker):
         # job, which may be scoring the results of a different experiment config.
         run_arguments = {"run_id": run_id} if resumed else {"run_name": context.run_name, "tags": context.tags}
 
+        self._authorization.apply()
         with mlflow.start_run(**run_arguments) as active_run:
             self._run_id = active_run.info.run_id
 
-            with self._capture_logs(context.job_name):
-                action = "Resumed" if resumed else "Started"
-                logger.info(f"{action} MLflow run '{context.run_name}' (run_id={self._run_id}).")
+            try:
+                with self._capture_logs(context.job_name):
+                    action = "Resumed" if resumed else "Started"
+                    logger.info(f"{action} MLflow run '{context.run_name}' (run_id={self._run_id}).")
 
-                if not resumed:
-                    mlflow.log_params(context.params)
+                    if not resumed:
+                        self.log_params(context.params)
 
-                try:
-                    yield self._run_id
-                except Exception:
-                    logger.exception(f"MLflow run {self._run_id} failed.")
-                    raise
-                finally:
-                    self._run_id = None
+                    try:
+                        yield self._run_id
+                    except Exception:
+                        logger.exception(f"MLflow run {self._run_id} failed.")
+                        raise
+                    finally:
+                        self._run_id = None
+            finally:
+                # leaving the block ends the run on the server, possibly hours after it started
+                self._authorization.apply()
 
     def log_params(self, params: dict[str, Any]) -> None:
+        self._authorization.apply()
         mlflow.log_params(params)
 
     def log_metric(
@@ -181,6 +191,7 @@ class MLflowTracker(ExperimentTracker):
         value: float,
         step: int | None,
     ) -> None:
+        self._authorization.apply()
         mlflow.log_metric(key, value, step=step)
 
     def log_metrics(
@@ -188,6 +199,7 @@ class MLflowTracker(ExperimentTracker):
         metrics: dict[str, float],
         step: int | None,
     ) -> None:
+        self._authorization.apply()
         mlflow.log_metrics(metrics, step=step)
 
     def log_artifact(
@@ -195,6 +207,7 @@ class MLflowTracker(ExperimentTracker):
         local_path: Path,
         artifact_path: str | None,
     ) -> None:
+        self._authorization.apply()
         mlflow.log_artifact(str(local_path), artifact_path=artifact_path)
 
     def log_dict(
@@ -202,6 +215,7 @@ class MLflowTracker(ExperimentTracker):
         payload: dict[str, Any],
         artifact_file: str,
     ) -> None:
+        self._authorization.apply()
         mlflow.log_dict(payload, artifact_file)
 
     @contextmanager
@@ -226,6 +240,7 @@ class MLflowTracker(ExperimentTracker):
                 logger.remove(loguru_sink_id)
                 root_logger.removeHandler(handler)
                 handler.close()
+                self._authorization.apply()
                 mlflow.log_artifact(str(log_path), artifact_path=MLFLOW_LOG_ARTIFACT_DIR)
 
 
@@ -236,8 +251,9 @@ class TrackerFactory:
     def build(
         tracking_uri: str,
         experiment_name: str,
+        authorization: TrackingAuthorization,
     ) -> ExperimentTracker:
         if tracking_uri == "":
             return NoOpTracker()
 
-        return MLflowTracker(tracking_uri=tracking_uri, experiment_name=experiment_name)
+        return MLflowTracker(tracking_uri=tracking_uri, experiment_name=experiment_name, authorization=authorization)
