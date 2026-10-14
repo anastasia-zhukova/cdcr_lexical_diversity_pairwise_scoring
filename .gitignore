@@ -22,6 +22,9 @@ evaluation_results/output_files_files/
 !evaluation_results/.gitkeep
 cdcr_lexical_diversity_pairwise_scoring/utils/resources
 sweep_logs
+/outputs
+/checkpoints
+evaluation_results/*.csv
 
 # https://github.com/github/gitignore/blob/main/Python.gitignore
 
