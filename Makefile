@@ -8,7 +8,7 @@
 #   make pipeline CONFIG=single-random-cd2cr      all five steps for one config
 #   make embed CONFIGS="single-random-cd2cr single-random-gvc"   restrict a sweep
 #   make train GROUP=single-random   one config family: single-random, single-contrast_tfidf,
-#                                    single-contrast_encoder or mix-contrast_encoder
+#                                    single-contrast_encoder, mix-random or mix-contrast_encoder
 #
 # A failing config does not stop the sweep: the remaining configs still run and the failures are
 # listed at the end (the target then exits non-zero). Each run's output is kept in
