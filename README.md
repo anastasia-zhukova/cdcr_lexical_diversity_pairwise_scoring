@@ -4,10 +4,10 @@ a mix of two, transfers to CDCR datasets with different problems, i.e., lexical 
 The model is the pairwise scorer
 of [Eirew et al. 2021](https://github.com/AlonEirew/cross-doc-event-coref) (frozen RoBERTa-large mention
 representations and an MLP over mention pairs, followed by agglomerative clustering). The experiments vary the training
-data (single dataset vs. a mix of two) and the way training pairs are sampled (random vs. contrastive pairs chosen by
-tf-idf or sentence-encoder similarity), and every model is evaluated on all 12 datasets of uCDCR.
+data (single dataset vs. a mix of two) and the way training pairs are sampled (e.g., random, contrastive pairs chosen by
+TF-IDF or sentence-transformer mention vectorization), and every model is evaluated on all 12 datasets of uCDCR.
 
-This is a baseline to the CL-coref and MS-coref models described in "Navigating Real-World Challenges of 
+Random mention sampling strategy is used as a baseline to the CL-coref and MS-coref models described in "Navigating Real-World Challenges of 
 Cross-Document Coreference Resolution using Contrastive and Transfer Learning". 
 
 ## uCDCR dataset
