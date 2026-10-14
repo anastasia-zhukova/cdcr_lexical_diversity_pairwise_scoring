@@ -74,6 +74,7 @@ experiment name used for the cache and output folders and the MLflow run. Every 
 | `single-random-<dataset>.yaml` (10 files) | `single-random` | single-dataset training | Train and dev on one dataset, random pairs (10 negatives per positive). |
 | `single-contrast_tfidf-<dataset>.yaml` (10 files) | `single-contrast_tfidf` | single-dataset training | As above, but with contrastive pairs: easy/hard positives and negatives chosen by tf-idf similarity of the mentions within a topic. |
 | `single-contrast_encoder-<dataset>.yaml` (10 files) | `single-contrast_encoder` | single-dataset training | As above, with similarity from the sentence encoder `intfloat/multilingual-e5-large-instruct`. |
+| `mix-random-<base>_<dataset>.yaml` (17 files) | `mix-random` | mixed training | Train on a base dataset (`ecbplus` or `nident`) plus one other dataset with random pairs (10 negatives per positive); dev on all 12 datasets (capped at 200 000 pairs). |
 | `mix-contrast_encoder-<base>_<dataset>.yaml` (17 files) | `mix-contrast_encoder` | mixed training | Train on a base dataset (`ecbplus` or `nident`) plus one other dataset with encoder contrastive pairs; dev on all 12 datasets (capped at 200 000 pairs). |
 | `test_*.yaml` | – | smoke tests | Small runs (`roberta-base`, 8 000 train pairs, 10 epochs) for checking the pipeline; not included in the sweeps. |
 
@@ -104,7 +105,7 @@ The same-head-lemma baseline is computed in the uCDCR project, see `conll_lemma_
 ## Running sweeps over all experiment configs
 `make <step>` runs one pipeline step for every config in `config/` except the `test_*` smoke configs (`make gen-pairs`, `make embed`, `make train`,
 `make inference`, `make scoring`); `make all` runs the five steps in order, each swept over all configs;
-`make pipeline CONFIG=<name>` runs all steps for one config. Restrict a sweep with `CONFIGS="a b"` or to one config family with `GROUP=single-random` (also `single-contrast_tfidf`, `single-contrast_encoder`, `mix-contrast_encoder`). A failing
+`make pipeline CONFIG=<name>` runs all steps for one config. Restrict a sweep with `CONFIGS="a b"` or to one config family with `GROUP=single-random` (also `single-contrast_tfidf`, `single-contrast_encoder`, `mix-random`, `mix-contrast_encoder`). A failing
 config does not stop the sweep — failures are listed at the end and each run's output is kept in `sweep_logs/`;
 `make all` and `make pipeline` do not start the next step if any config failed.
 Runs are memory-capped through `systemd-run` (`MEMORY_MAX=12G` by default, `MEMORY_MAX=` to disable). The Makefile
