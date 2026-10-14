@@ -8,6 +8,7 @@ import pytest
 
 from cdcr_lexical_diversity_pairwise_scoring import logger
 from cdcr_lexical_diversity_pairwise_scoring.tracking import mlflow_tracker
+from cdcr_lexical_diversity_pairwise_scoring.tracking.authorization import NoAuthorization, TrackingAuthorization
 from cdcr_lexical_diversity_pairwise_scoring.tracking.mlflow_tracker import MLflowTracker, NoOpTracker, TrackerFactory
 from cdcr_lexical_diversity_pairwise_scoring.tracking.run_context import RunContext
 
@@ -15,35 +16,59 @@ from cdcr_lexical_diversity_pairwise_scoring.tracking.run_context import RunCont
 @pytest.fixture
 def fake_mlflow(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Patch the mlflow module so a run executes without a server; record what was sent."""
-    recorded: dict[str, Any] = {"artifacts": {}, "params": [], "metrics": [], "start_run_kwargs": []}
+    # "calls" keeps the order of every request to the server and of every authorization
+    recorded: dict[str, Any] = {"artifacts": {}, "params": [], "metrics": [], "start_run_kwargs": [], "calls": []}
 
     @contextmanager
     def fake_start_run(**kwargs: Any) -> Any:
+        recorded["calls"].append("start_run")
         recorded["start_run_kwargs"].append(kwargs)
         run = MagicMock()
         run.info.run_id = kwargs.get("run_id") or "run-123"
         yield run
+        recorded["calls"].append("end_run")
 
     def fake_log_artifact(local_path: str, artifact_path: str | None = None) -> None:
+        recorded["calls"].append("log_artifact")
         # Read eagerly: the tracker writes into a TemporaryDirectory that is gone after the run.
         recorded["artifacts"][Path(local_path).name] = (artifact_path, Path(local_path).read_text(encoding="utf-8"))
 
+    def fake_log_params(params: dict[str, Any]) -> None:
+        recorded["calls"].append("log_params")
+        recorded["params"].append(params)
+
+    def fake_log_metrics(metrics: dict[str, float], step: int | None = None) -> None:
+        recorded["calls"].append("log_metrics")
+        recorded["metrics"].append((metrics, step))
+
     monkeypatch.setattr(mlflow_tracker.mlflow, "set_tracking_uri", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(mlflow_tracker.mlflow, "set_experiment", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(mlflow_tracker.mlflow, "start_run", fake_start_run)
-    monkeypatch.setattr(mlflow_tracker.mlflow, "log_params", recorded["params"].append)
     monkeypatch.setattr(
         mlflow_tracker.mlflow,
-        "log_metrics",
-        lambda metrics, step=None: recorded["metrics"].append((metrics, step)),
+        "set_experiment",
+        lambda *_args, **_kwargs: recorded["calls"].append("set_experiment"),
     )
+    monkeypatch.setattr(mlflow_tracker.mlflow, "start_run", fake_start_run)
+    monkeypatch.setattr(mlflow_tracker.mlflow, "log_params", fake_log_params)
+    monkeypatch.setattr(mlflow_tracker.mlflow, "log_metrics", fake_log_metrics)
     monkeypatch.setattr(mlflow_tracker.mlflow, "log_artifact", fake_log_artifact)
     return recorded
 
 
+class RecordingAuthorization(TrackingAuthorization):
+    def __init__(self, calls: list[str]) -> None:
+        self._calls = calls
+
+    def apply(self) -> None:
+        self._calls.append("authorize")
+
+
 @pytest.fixture
-def tracker(fake_mlflow: dict[str, Any]) -> MLflowTracker:  # noqa: ARG001
-    return MLflowTracker(tracking_uri="http://example.test", experiment_name="exp")
+def tracker(fake_mlflow: dict[str, Any]) -> MLflowTracker:
+    return MLflowTracker(
+        tracking_uri="http://example.test",
+        experiment_name="exp",
+        authorization=RecordingAuthorization(fake_mlflow["calls"]),
+    )
 
 
 @pytest.fixture
@@ -134,6 +159,27 @@ def test_metrics_are_forwarded_with_step(
     assert fake_mlflow["metrics"] == [({"dev/f1": 0.5}, 3)]
 
 
+def test_every_request_to_the_server_is_authorized_right_before_it_is_sent(
+    tracker: MLflowTracker,
+    context: RunContext,
+    fake_mlflow: dict[str, Any],
+) -> None:
+    # tokens expire within minutes while a run lasts hours: authorizing once at the start is not enough
+    with tracker.run(context, run_id=None):
+        tracker.log_metrics({"dev/f1": 0.5}, step=3)
+        tracker.log_params({"extra": "1"})
+
+    assert fake_mlflow["calls"] == [
+        "authorize", "set_experiment",
+        "authorize", "start_run",
+        "authorize", "log_params",
+        "authorize", "log_metrics",
+        "authorize", "log_params",
+        "authorize", "log_artifact",
+        "authorize", "end_run",
+    ]
+
+
 def test_noop_tracker_yields_no_run_id(context: RunContext) -> None:
     tracker = NoOpTracker()
 
@@ -145,10 +191,16 @@ def test_noop_tracker_yields_no_run_id(context: RunContext) -> None:
 
 
 def test_factory_builds_noop_without_tracking_uri() -> None:
-    assert isinstance(TrackerFactory.build(tracking_uri="", experiment_name="exp"), NoOpTracker)
+    tracker = TrackerFactory.build(tracking_uri="", experiment_name="exp", authorization=NoAuthorization())
+
+    assert isinstance(tracker, NoOpTracker)
 
 
 def test_factory_builds_mlflow_tracker_with_tracking_uri(fake_mlflow: dict[str, Any]) -> None:  # noqa: ARG001
-    tracker = TrackerFactory.build(tracking_uri="http://example.test", experiment_name="exp")
+    tracker = TrackerFactory.build(
+        tracking_uri="http://example.test",
+        experiment_name="exp",
+        authorization=NoAuthorization(),
+    )
 
     assert isinstance(tracker, MLflowTracker)

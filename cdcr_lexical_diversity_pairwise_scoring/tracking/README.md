@@ -15,6 +15,15 @@ Experiment tracking for the pipeline scripts, backed by MLflow.
   - `TrackerFactory.build(tracking_uri, experiment_name)` — `MLflowTracker` for a non-empty tracking URI,
     `NoOpTracker` otherwise. The package never reads the environment itself: the scripts pass the values
     from `constants.py` in.
+- `authorization.py` — how the MLflow client authenticates. `MLflowTracker` takes a
+  `TrackingAuthorization` and calls its `apply()` right before every request to the server.
+  - `KeycloakAuthorization` — a Keycloak service-account client (client credentials grant). Exports the
+    bearer token as `MLFLOW_TRACKING_TOKEN` and fetches a new one when the current token is within
+    `KEYCLOAK_TOKEN_REFRESH_MARGIN_SECONDS` of its expiry, so a run of several hours survives 5-minute tokens.
+  - `NoAuthorization` — nothing to do: an open server, or basic auth that MLflow reads from its own variables.
+  - `AuthorizationFactory.build(...)` — `KeycloakAuthorization` when a client id is set, `NoAuthorization`
+    otherwise. Refuses a client id without a token URL, and a client id together with basic-auth credentials
+    (MLflow would send basic auth and drop the token).
 - `run_context.py` — `RunContext`: run name, params and tags derived from the Hydra config of
   the running job. The run is named after the experiment config (e.g. `single-random-cd2cr`).
 
@@ -25,7 +34,9 @@ Read from `.env` (see `.env.example`) by `constants.py` and handed to `TrackerFa
 | variable                  | meaning                                                            |
 |---------------------------|--------------------------------------------------------------------|
 | `MLFLOW_TRACKING_URI`     | tracking server; empty/unset disables tracking (`NoOpTracker`)     |
-| `MLFLOW_TRACKING_USERNAME`/`MLFLOW_TRACKING_PASSWORD` | basic-auth credentials, read by the MLflow client |
+| `KEYCLOAK_TOKEN_URL`      | token endpoint of the Keycloak realm, e.g. `https://<keycloak-host>/realms/<realm>/protocol/openid-connect/token` |
+| `KEYCLOAK_CLIENT_ID`/`KEYCLOAK_CLIENT_SECRET` | service-account client with the `mlflow` `access` role; empty client id disables Keycloak |
+| `MLFLOW_TRACKING_USERNAME`/`MLFLOW_TRACKING_PASSWORD` | basic-auth credentials for a server without Keycloak, read by the MLflow client; leave unset with Keycloak |
 | `MLFLOW_EXPERIMENT_NAME`  | the MLflow experiment all runs of this project are grouped under   |
 
 ## How a run flows through the pipeline
@@ -41,5 +52,6 @@ One MLflow run corresponds to one experiment config and spans three scripts:
 3. `scoring.py` resumes the run of every scored experiment and logs the per-dataset CoNLL
    metrics (`<metric>/<dataset>/<mention_type>`) plus the summary CSVs under `scoring/`.
 
-If `model.json` has no run id (trained before tracking existed), the downstream scripts open a
-fresh run instead so nothing is lost.
+If `model.json` has no run id (trained before tracking existed), `inference_clustering.py` opens a
+fresh run instead so nothing is lost, while `scoring.py` skips tracking for that experiment with a
+warning (its scores still go to the CSVs in `evaluation_results/`).

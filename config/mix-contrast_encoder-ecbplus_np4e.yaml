@@ -22,7 +22,7 @@ dev_dataset_names:
   - WECEng
 dev_scope: subtopic
 dev_type_of_pairs: all
-max_pairs_dev: null
+max_pairs_dev: 200000
 test_scope: subtopic
 test_dataset_names:
   - CEREC

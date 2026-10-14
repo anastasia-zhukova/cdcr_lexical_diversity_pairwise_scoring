@@ -23,13 +23,25 @@ from cdcr_lexical_diversity_pairwise_scoring.utils.log_utils import LogFile
 from cdcr_lexical_diversity_pairwise_scoring.constants import (
     PROJECT_ROOT,
     DEFAULT_CONFIG_NAME,
+    DEV_EVAL_BATCH_SIZE,
+    KEYCLOAK_CLIENT_ID,
+    KEYCLOAK_CLIENT_SECRET,
+    KEYCLOAK_TOKEN_REFRESH_MARGIN_SECONDS,
+    KEYCLOAK_TOKEN_REQUEST_TIMEOUT_SECONDS,
+    KEYCLOAK_TOKEN_URL,
     MLFLOW_EXPERIMENT_NAME,
     MLFLOW_RUN_ID_KEY,
     MLFLOW_TRACKING_URI,
+    MLFLOW_TRACKING_USERNAME,
     MLFLOW_TRAINING_ARTIFACT_DIR,
 )
 from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
-from cdcr_lexical_diversity_pairwise_scoring.tracking import ExperimentTracker, RunContext, TrackerFactory
+from cdcr_lexical_diversity_pairwise_scoring.tracking import (
+    AuthorizationFactory,
+    ExperimentTracker,
+    RunContext,
+    TrackerFactory,
+)
 
 torch.manual_seed(1234)
 random.seed(1234)
@@ -90,7 +102,9 @@ def train_pairwise(
         logger.info(f"Finished training for epoch {epoch}. Final loss: {epoch_loss:.10f}")
 
         pairwise_model.eval()
-        dev_accuracy, dev_precision, dev_recall, dev_f1 = accuracy_on_dataset("Dev", epoch + 1, pairwise_model, validation)
+        dev_accuracy, dev_precision, dev_recall, dev_f1 = accuracy_on_dataset(
+            "Dev", epoch + 1, pairwise_model, validation, batch_size=DEV_EVAL_BATCH_SIZE
+        )
         tracker.log_metrics(
             {
                 "train/loss": epoch_loss,
@@ -117,7 +131,7 @@ def accuracy_on_dataset(
     epoch: int,
     pairwise_model: PairwiseModelKenton,
     features,
-    batch_size: int = 10000,
+    batch_size: int,
 ):
     all_labels, all_predictions = run_inference(pairwise_model, features, batch_size=batch_size)
     accuracy = torch.mean((all_labels == all_predictions).float())
@@ -136,7 +150,7 @@ def run_inference(
     pairwise_model: PairwiseModelKenton,
     features,
     round_pred: bool = True,
-    batch_size: int = 10000,
+    batch_size: int = DEV_EVAL_BATCH_SIZE,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     dataset_size = len(features)
     labels = []
@@ -208,7 +222,19 @@ def init_basic_training_resources(
 
 @hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=DEFAULT_CONFIG_NAME)
 def main(config: Config):
-    tracker = TrackerFactory.build(tracking_uri=MLFLOW_TRACKING_URI, experiment_name=MLFLOW_EXPERIMENT_NAME)
+    authorization = AuthorizationFactory.build(
+        token_url=KEYCLOAK_TOKEN_URL,
+        client_id=KEYCLOAK_CLIENT_ID,
+        client_secret=KEYCLOAK_CLIENT_SECRET,
+        basic_auth_username=MLFLOW_TRACKING_USERNAME,
+        refresh_margin_seconds=KEYCLOAK_TOKEN_REFRESH_MARGIN_SECONDS,
+        request_timeout_seconds=KEYCLOAK_TOKEN_REQUEST_TIMEOUT_SECONDS,
+    )
+    tracker = TrackerFactory.build(
+        tracking_uri=MLFLOW_TRACKING_URI,
+        experiment_name=MLFLOW_EXPERIMENT_NAME,
+        authorization=authorization,
+    )
 
     with tracker.run(RunContext.from_hydra(config), run_id=None) as run_id:
         train_and_save(config, get_experiment_name(), tracker, run_id)
