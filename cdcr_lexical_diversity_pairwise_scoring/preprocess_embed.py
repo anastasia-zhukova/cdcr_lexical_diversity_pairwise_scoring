@@ -1,16 +1,3 @@
-"""Usage:
-    preprocess_embed.py <File> [<File2>] [<File3>]
-    preprocess_embed.py <File> [<File2>] [<File3>] [--max=<x>]
-    preprocess_embed.py <File> [<File2>] [<File3>] [--cuda=<y>]
-    preprocess_embed.py <File> [<File2>] [<File3>] [--max=<x>] [--cuda=<y>]
-
-Options:
-    -h --help     Show this screen.
-    --max=<x>   Maximum surrounding context [default: 250]
-    --cuda=<y>  True/False - Whether to use cuda device or not [default: True].
-
-"""
-
 import pickle
 import random
 import json
