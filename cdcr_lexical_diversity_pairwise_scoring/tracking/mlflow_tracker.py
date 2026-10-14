@@ -1,0 +1,259 @@
+import logging
+import tempfile
+from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any
+
+import mlflow
+
+from cdcr_lexical_diversity_pairwise_scoring import logger
+from cdcr_lexical_diversity_pairwise_scoring.constants import MLFLOW_LOG_ARTIFACT_DIR, MLFLOW_RUN_LOG_EXTENSION
+from cdcr_lexical_diversity_pairwise_scoring.tracking.authorization import TrackingAuthorization
+from cdcr_lexical_diversity_pairwise_scoring.tracking.run_context import RunContext
+
+# Both logging systems of the project (loguru in the scripts, stdlib logging in `dataobjs`)
+# are captured into one file, so the format has to be applied at the stdlib handler level.
+_CAPTURED_LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(message)s"
+_LOGURU_TO_STDLIB_FORMAT = "{name}:{function}:{line} - {message}"
+
+
+class ExperimentTracker(ABC):
+    """Contract for run tracking used by the pipeline scripts.
+
+    A run is opened with `run()`; everything logged inside the block is attached to it.
+    Passing `run_id` resumes a run created by an earlier pipeline step (e.g. the inference
+    step attaching its results to the training run).
+    """
+
+    @property
+    @abstractmethod
+    def run_id(self) -> str | None: ...
+
+    @abstractmethod
+    @contextmanager
+    def run(
+        self,
+        context: RunContext,
+        run_id: str | None,
+    ) -> Iterator[str | None]: ...
+
+    @abstractmethod
+    def log_params(self, params: dict[str, Any]) -> None: ...
+
+    @abstractmethod
+    def log_metric(
+        self,
+        key: str,
+        value: float,
+        step: int | None,
+    ) -> None: ...
+
+    @abstractmethod
+    def log_metrics(
+        self,
+        metrics: dict[str, float],
+        step: int | None,
+    ) -> None: ...
+
+    @abstractmethod
+    def log_artifact(
+        self,
+        local_path: Path,
+        artifact_path: str | None,
+    ) -> None: ...
+
+    @abstractmethod
+    def log_dict(
+        self,
+        payload: dict[str, Any],
+        artifact_file: str,
+    ) -> None: ...
+
+
+class NoOpTracker(ExperimentTracker):
+    """Tracker that records nothing: the pipeline runs untouched."""
+
+    @property
+    def run_id(self) -> str | None:
+        return None
+
+    @contextmanager
+    def run(
+        self,
+        context: RunContext,
+        run_id: str | None,
+    ) -> Iterator[str | None]:
+        logger.warning(f"Experiment tracking is disabled. Run '{context.run_name}' is not tracked.")
+        yield None
+
+    def log_params(self, params: dict[str, Any]) -> None:
+        return
+
+    def log_metric(
+        self,
+        key: str,
+        value: float,
+        step: int | None,
+    ) -> None:
+        return
+
+    def log_metrics(
+        self,
+        metrics: dict[str, float],
+        step: int | None,
+    ) -> None:
+        return
+
+    def log_artifact(
+        self,
+        local_path: Path,
+        artifact_path: str | None,
+    ) -> None:
+        return
+
+    def log_dict(
+        self,
+        payload: dict[str, Any],
+        artifact_file: str,
+    ) -> None:
+        return
+
+
+class MLflowTracker(ExperimentTracker):
+    """Thin OOP wrapper over the MLflow client.
+
+    Owns the tracking URI and the experiment name. `authorization` is applied right before every
+    request to the server, so short-lived credentials stay valid through a run that takes hours.
+    """
+
+    def __init__(
+        self,
+        tracking_uri: str,
+        experiment_name: str,
+        authorization: TrackingAuthorization,
+    ) -> None:
+        self._experiment_name = experiment_name
+        self._authorization = authorization
+        self._run_id: str | None = None
+        mlflow.set_tracking_uri(tracking_uri)
+        logger.debug(f"MLflow tracker configured for {tracking_uri} (experiment '{experiment_name}').")
+
+    @property
+    def run_id(self) -> str | None:
+        return self._run_id
+
+    @contextmanager
+    def run(
+        self,
+        context: RunContext,
+        run_id: str | None,
+    ) -> Iterator[str | None]:
+        self._authorization.apply()
+        mlflow.set_experiment(self._experiment_name)
+        resumed = run_id is not None
+
+        # A resumed run keeps its own name, tags and params: the context describes the current
+        # job, which may be scoring the results of a different experiment config.
+        run_arguments = {"run_id": run_id} if resumed else {"run_name": context.run_name, "tags": context.tags}
+
+        self._authorization.apply()
+        with mlflow.start_run(**run_arguments) as active_run:
+            self._run_id = active_run.info.run_id
+
+            try:
+                with self._capture_logs(context.job_name):
+                    action = "Resumed" if resumed else "Started"
+                    logger.info(f"{action} MLflow run '{context.run_name}' (run_id={self._run_id}).")
+
+                    if not resumed:
+                        self.log_params(context.params)
+
+                    try:
+                        yield self._run_id
+                    except Exception:
+                        logger.exception(f"MLflow run {self._run_id} failed.")
+                        raise
+                    finally:
+                        self._run_id = None
+            finally:
+                # leaving the block ends the run on the server, possibly hours after it started
+                self._authorization.apply()
+
+    def log_params(self, params: dict[str, Any]) -> None:
+        self._authorization.apply()
+        mlflow.log_params(params)
+
+    def log_metric(
+        self,
+        key: str,
+        value: float,
+        step: int | None,
+    ) -> None:
+        self._authorization.apply()
+        mlflow.log_metric(key, value, step=step)
+
+    def log_metrics(
+        self,
+        metrics: dict[str, float],
+        step: int | None,
+    ) -> None:
+        self._authorization.apply()
+        mlflow.log_metrics(metrics, step=step)
+
+    def log_artifact(
+        self,
+        local_path: Path,
+        artifact_path: str | None,
+    ) -> None:
+        self._authorization.apply()
+        mlflow.log_artifact(str(local_path), artifact_path=artifact_path)
+
+    def log_dict(
+        self,
+        payload: dict[str, Any],
+        artifact_file: str,
+    ) -> None:
+        self._authorization.apply()
+        mlflow.log_dict(payload, artifact_file)
+
+    @contextmanager
+    def _capture_logs(self, job_name: str) -> Iterator[None]:
+        """Tee everything logged during the run into a file and attach it to the active run.
+
+        The file is named after the job so that every pipeline step attaching to the run keeps its
+        own log. The artifact is uploaded in `finally` so a failed or aborted run still keeps its logs.
+        """
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            log_path = Path(temporary_directory) / f"{job_name}{MLFLOW_RUN_LOG_EXTENSION}"
+            handler = logging.FileHandler(log_path, encoding="utf-8")
+            handler.setFormatter(logging.Formatter(_CAPTURED_LOG_FORMAT))
+
+            root_logger = logging.getLogger()
+            root_logger.addHandler(handler)
+            loguru_sink_id = logger.add(handler, format=_LOGURU_TO_STDLIB_FORMAT, level="DEBUG")
+
+            try:
+                yield
+            finally:
+                logger.remove(loguru_sink_id)
+                root_logger.removeHandler(handler)
+                handler.close()
+                self._authorization.apply()
+                mlflow.log_artifact(str(log_path), artifact_path=MLFLOW_LOG_ARTIFACT_DIR)
+
+
+class TrackerFactory:
+    """Builds the tracker for a run: MLflow when a tracking URI is given, no-op otherwise."""
+
+    @staticmethod
+    def build(
+        tracking_uri: str,
+        experiment_name: str,
+        authorization: TrackingAuthorization,
+    ) -> ExperimentTracker:
+        if tracking_uri == "":
+            return NoOpTracker()
+
+        return MLflowTracker(tracking_uri=tracking_uri, experiment_name=experiment_name, authorization=authorization)

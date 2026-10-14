@@ -1,0 +1,267 @@
+import json
+import pickle
+from datetime import datetime
+
+import pandas as pd
+import torch
+import numpy as np
+from pathlib import Path
+from itertools import chain
+from sklearn.cluster import AgglomerativeClustering
+from typing import List
+from tqdm import tqdm
+import pathlib
+import hydra
+from hydra.core.config_store import ConfigStore
+
+
+from cdcr_lexical_diversity_pairwise_scoring import logger
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import write_coref_scorer_results, write_coref_scorer_results_simple
+from cdcr_lexical_diversity_pairwise_scoring.utils.embed_utils import EmbedFromFile
+from cdcr_lexical_diversity_pairwise_scoring.coref_system.pairwise_model_kenton import PairwiseModelKenton
+from cdcr_lexical_diversity_pairwise_scoring.constants import (
+    MAX_ALLOWED_BATCH_SIZE,
+    PROJECT_ROOT,
+    CLUSTERING_THRESHOLD,
+    DEFAULT_CONFIG_NAME,
+    KEYCLOAK_CLIENT_ID,
+    KEYCLOAK_CLIENT_SECRET,
+    KEYCLOAK_TOKEN_REFRESH_MARGIN_SECONDS,
+    KEYCLOAK_TOKEN_REQUEST_TIMEOUT_SECONDS,
+    KEYCLOAK_TOKEN_URL,
+    MLFLOW_EXPERIMENT_NAME,
+    MLFLOW_INFERENCE_ARTIFACT_DIR,
+    MLFLOW_RUN_ID_KEY,
+    MLFLOW_TRACKING_URI,
+    MLFLOW_TRACKING_USERNAME,
+)
+from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import Config
+from cdcr_lexical_diversity_pairwise_scoring.utils.io_utils import get_dataset_info_save_path, get_model_info_save_path, get_encoding_cache_file, get_predicted_cluster_path, get_conll_files_root_path, get_evaluation_result_path, get_experiment_name
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import uCDCRDataSet, EvalPairsType
+from cdcr_lexical_diversity_pairwise_scoring.tracking import (
+    AuthorizationFactory,
+    ExperimentTracker,
+    RunContext,
+    TrackerFactory,
+)
+
+torch.serialization.add_safe_globals([PairwiseModelKenton, torch.nn.modules.linear.Linear, torch.nn.modules.container.Sequential, torch.nn.modules.activation.ReLU, EmbedFromFile, pathlib.WindowsPath, pathlib.PosixPath])
+
+agl_clust = AgglomerativeClustering(
+        n_clusters=None,
+        metric="precomputed",
+        linkage="average",
+        distance_threshold=CLUSTERING_THRESHOLD,
+    )
+
+
+def get_pairwise_model(
+    model_file_path: Path,
+    embeddings_file_paths: list[Path],
+    use_cuda: bool
+):
+    pairwise_model = torch.load(model_file_path, weights_only=True)
+    pairwise_model.set_embed_utils(EmbedFromFile(embeddings_file_paths, use_cuda))
+
+    if use_cuda:
+        pairwise_model.cuda()
+
+    pairwise_model.eval()
+    return pairwise_model
+
+
+def predict_and_cluster(
+    test_dataset: uCDCRDataSet,
+    model: PairwiseModelKenton,
+    experiment_name: str,
+    tracker: ExperimentTracker,
+    evaluation_level: str = "subtopic"
+):
+    # cached_file = f"predictions_{experiment_name}.pickle"
+    # cached_path = PROJECT_ROOT / "experiment_cache_results" / cached_file
+    # if cached_path.exists():
+    #     with open(cached_path, "rb") as file:
+    #         predictions = pickle.load(file)
+    # else:
+    #     predictions = {}
+
+    # self.positive_pairs_eval_format[dataset][topic_id][pairs_type.value]
+    now_ = datetime.now()
+    save_filename = f'{now_.strftime("%Y-%m-%d_%H-%M-%S")}_inference_time.csv'
+    inf_time_path = get_evaluation_result_path() / save_filename
+    experiment_results_dict = {}
+
+    inference_time_df = pd.DataFrame()
+
+    conll_path = get_conll_files_root_path(experiment_name)
+
+    for dataset, topic_dict in test_dataset.positive_pairs_eval_format.items():
+        logger.info(f"Scoring dataset {dataset}")
+        experiment_results_dict[dataset] = {}
+
+        for topic_id, mention_config in tqdm(topic_dict.items(), desc=f"Scoring {evaluation_level}s in {dataset}", total=len(topic_dict)):
+            mention_topic_dict = {m.mention_id: m for m in test_dataset.topics.topics_dict[topic_id].mentions}
+            experiment_results_dict[dataset][topic_id] = {}
+
+            for pairs_type in list(mention_config.keys()):
+                experiment_results_dict[dataset][topic_id][pairs_type] = []
+
+                all_pairs = test_dataset.positive_pairs_eval_format[dataset][topic_id][pairs_type] + test_dataset.negative_pairs_eval_format[dataset][topic_id][pairs_type]
+                if len(all_pairs) == 0:
+                    # e.g. the "entities" pairs of an event-only dataset: nothing to score or cluster
+                    continue
+
+                # key = f"{dataset}_{topic_id}_{pairs_type}"
+                # if key in predictions:
+                #     all_scores = predictions[key]
+                # else:
+                start = datetime.now()
+                all_scores = score_mention_pairs(model, all_pairs)
+                # predictions[key] = all_scores
+
+                # correctly reshape mentions now
+                used_mention_ids = list(set(chain.from_iterable([[pair[0].mention_id, pair[1].mention_id] for pair in all_pairs])))
+                similarity_matrix = build_similarity_matrix(all_pairs, all_scores, used_mention_ids)
+
+                clustering = agl_clust.fit(similarity_matrix)
+                true_clusters = [mention_topic_dict[m_id].coref_chain for m_id in used_mention_ids]
+                predicted_clusters = [str(v) for v in clustering.labels_]
+                end = datetime.now()
+
+                output_folder_true = conll_path / dataset / pairs_type / topic_id
+                output_folder_true.mkdir(parents=True, exist_ok=True)
+                write_coref_scorer_results_simple(true_clusters, used_mention_ids, pairs_type, output_folder_true, dataset, topic_id, predictions=False)
+                write_coref_scorer_results_simple(predicted_clusters, used_mention_ids, pairs_type, output_folder_true, dataset, topic_id, predictions=True)
+                inference_time_df = pd.concat([inference_time_df, pd.DataFrame({
+                    "experiment": experiment_name,
+                    "dataset": dataset,
+                    "topic": topic_id,
+                    "pair_type": pairs_type,
+                    "mentions": len(used_mention_ids),
+                    "inference_time": (end-start).total_seconds()
+                }, index=[0])])
+
+                for i, m_id in enumerate(used_mention_ids):
+                    m = mention_topic_dict[m_id]
+                    m_save = {k: v for k, v in dict(m.__dict__).items() if k in ["mention_id", "tokens_str", "coref_chain", "topic", "subtopic", "doc", "topic_id",  "subtopic_id", "doc_id", "dataset", "mention_context", "tokens_number_context"]}
+                    # topic_id already carries the dataset name
+                    m_save["predicted_coref_chain"] = f"{topic_id}_{predicted_clusters[i]}"
+                    experiment_results_dict[dataset][topic_id][pairs_type].append(m_save)
+
+            # with open(cached_path, "wb") as file:
+            #     pickle.dump(predictions, file)
+            # logger.info(f"Cached predictions of topic {topic_id}")
+            inference_time_df.to_csv(inf_time_path)
+
+    exp_dict_path = get_predicted_cluster_path(experiment_name)
+    with exp_dict_path.open("w") as file:
+        json.dump(experiment_results_dict, file)
+
+    logger.info(f"The files for the CoNLL scorer are saved into: {conll_path}.")
+    logger.info(f"The files with true and predicted predictions_json are saved into: {exp_dict_path}.")
+
+    tracker.log_artifact(inf_time_path, artifact_path=MLFLOW_INFERENCE_ARTIFACT_DIR)
+    tracker.log_artifact(exp_dict_path, artifact_path=MLFLOW_INFERENCE_ARTIFACT_DIR)
+    tracker.log_metrics(
+        {
+            "inference/total_time_seconds": float(inference_time_df["inference_time"].sum()),
+            "inference/scored_topics": float(len(inference_time_df)),
+        },
+        step=None,
+    )
+
+
+def build_similarity_matrix(all_pairs: list, all_scores: List[float], mention_ids: list[str]) -> np.ndarray:
+    """
+    The symmetric (mention x mention) matrix of pair scores, rows and columns in the order of `mention_ids`.
+
+    Cells of pairs that were not scored stay 0; a pair scored several times keeps its last score. Filled with
+    one indexed assignment instead of a pandas .loc per pair: the single-topic datasets (NiDENT, NP4E,
+    NewsWCL50) have millions of pairs, and the per-pair lookups took minutes per topic.
+    """
+    positions = {mention_id: position for position, mention_id in enumerate(mention_ids)}
+    rows = np.fromiter((positions[pair[0].mention_id] for pair in all_pairs), dtype=np.int64, count=len(all_pairs))
+    columns = np.fromiter((positions[pair[1].mention_id] for pair in all_pairs), dtype=np.int64, count=len(all_pairs))
+    scores = np.asarray(all_scores, dtype=np.float64)
+
+    # both cells of a pair are written one after the other, in pair order, exactly like a loop would
+    similarity_matrix = np.zeros((len(mention_ids), len(mention_ids)))
+    similarity_matrix[np.column_stack([rows, columns]).ravel(), np.column_stack([columns, rows]).ravel()] = np.repeat(scores, 2)
+    return similarity_matrix
+
+
+def score_mention_pairs(model: PairwiseModelKenton, all_pairs: list) -> List[float]:
+    """
+    Run the mention scoring model in the prediction mode.
+    """
+    pairs_chunks = [all_pairs]
+    if len(all_pairs) > MAX_ALLOWED_BATCH_SIZE:
+        pairs_chunks = [
+            all_pairs[i: i + MAX_ALLOWED_BATCH_SIZE] for i in range(0, len(all_pairs), MAX_ALLOWED_BATCH_SIZE)
+        ]
+    predictions = np.empty(0)
+    with torch.no_grad():
+        for chunk in pairs_chunks:
+            chunk_predictions, _ = model.predict(chunk, bs=len(chunk))
+            predictions = np.append(predictions, chunk_predictions.detach().cpu().numpy())
+    predictions = 1 - predictions
+    return predictions.tolist()
+
+
+@hydra.main(version_base="1.3", config_path=str(PROJECT_ROOT / "config"), config_name=DEFAULT_CONFIG_NAME)
+def main(config: Config):
+    experiment_name = get_experiment_name()
+    model_config_path = get_model_info_save_path(experiment_name)
+    with open(model_config_path, "r") as file:
+        model_config = json.load(file)
+
+    # attach the inference results to the training run of this experiment
+    authorization = AuthorizationFactory.build(
+        token_url=KEYCLOAK_TOKEN_URL,
+        client_id=KEYCLOAK_CLIENT_ID,
+        client_secret=KEYCLOAK_CLIENT_SECRET,
+        basic_auth_username=MLFLOW_TRACKING_USERNAME,
+        refresh_margin_seconds=KEYCLOAK_TOKEN_REFRESH_MARGIN_SECONDS,
+        request_timeout_seconds=KEYCLOAK_TOKEN_REQUEST_TIMEOUT_SECONDS,
+    )
+    tracker = TrackerFactory.build(
+        tracking_uri=MLFLOW_TRACKING_URI,
+        experiment_name=MLFLOW_EXPERIMENT_NAME,
+        authorization=authorization,
+    )
+    with tracker.run(RunContext.from_hydra(config), run_id=model_config.get(MLFLOW_RUN_ID_KEY)):
+        infer_and_cluster(config, experiment_name, model_config, tracker)
+
+
+def infer_and_cluster(
+    config: Config,
+    experiment_name: str,
+    model_config: dict,
+    tracker: ExperimentTracker,
+) -> None:
+    dataset_file_path = get_dataset_info_save_path(experiment_name)
+    with open(dataset_file_path, "r") as file:
+        dataset_config = json.load(file)
+
+    with open(dataset_config["test"], "rb") as file:
+        test_dataset = pickle.load(file)
+
+    cached_embeddings_paths = [get_encoding_cache_file("test", dataset_name, config.language_model) for dataset_name in test_dataset.dataset_components]
+    model = get_pairwise_model(
+        model_file_path=model_config["model"],
+        embeddings_file_paths=cached_embeddings_paths,
+        use_cuda=config.use_cuda
+    )
+
+    logger.info(f"Running mention scoring with model: {type(model).__name__}")
+    predict_and_cluster(
+        test_dataset=test_dataset,
+        model=model,
+        experiment_name=experiment_name,
+        tracker=tracker,
+        evaluation_level=config.test_scope,
+    )
+
+
+if __name__ == "__main__":
+    main()

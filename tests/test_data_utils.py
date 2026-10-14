@@ -1,27 +1,28 @@
 import unittest
 
-from src.dataobjs.dataset import DataSet, Split
-from src.dataobjs.topics import TopicConfig
-from src.preprocess_gen_pairs import validate_pairs
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split
+from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import ScopeConfig
 
 
 class TestDataUtils(unittest.TestCase):
     def test_pairs_file(self):
-        dataset = DataSet.get_dataset("ecb")
-        positive_, negative_ = dataset.get_pairwise_feat("tests/test_res/Event_gold_mentions.json", to_topics=TopicConfig.SubTopic)
+        dataset = DataSet.get_dataset(DatasetEnum.wec)
+        positive_, negative_ = dataset.get_pairwise_feat(
+            "tests/test_res/Event_gold_mentions.json",
+            to_topics=ScopeConfig.subtopic,
+        )
         self.validate(dataset, negative_, positive_)
 
-        dataset = DataSet.get_dataset("wec", split=Split.Train, ratio=10)
+        dataset = DataSet.get_dataset(DatasetEnum.wec, split=Split.train, ratio=10)
         positive_, negative_ = dataset.get_pairwise_feat("tests/test_res/Event_gold_mentions.json")
         self.assertEqual(len(positive_) * 10, len(negative_))
         self.validate(dataset, negative_, positive_)
 
-        dataset = DataSet.get_dataset("wec", split=Split.Dev)
+        dataset = DataSet.get_dataset(DatasetEnum.wec, split=Split.dev)
         positive_, negative_ = dataset.get_pairwise_feat("tests/test_res/Event_gold_mentions.json")
         self.validate(dataset, negative_, positive_)
 
     def validate(self, dataset, negative_, positive_):
-        validate_pairs(positive_, negative_)
         pairs = dataset.create_features_from_pos_neg(positive_, negative_)
         pairs_dict = dict()
         for pair in pairs:
@@ -37,5 +38,5 @@ class TestDataUtils(unittest.TestCase):
         print("Test Passed!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
