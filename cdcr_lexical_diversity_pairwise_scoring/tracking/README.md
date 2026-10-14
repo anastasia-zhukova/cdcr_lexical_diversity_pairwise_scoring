@@ -52,5 +52,6 @@ One MLflow run corresponds to one experiment config and spans three scripts:
 3. `scoring.py` resumes the run of every scored experiment and logs the per-dataset CoNLL
    metrics (`<metric>/<dataset>/<mention_type>`) plus the summary CSVs under `scoring/`.
 
-If `model.json` has no run id (trained before tracking existed), the downstream scripts open a
-fresh run instead so nothing is lost.
+If `model.json` has no run id (trained before tracking existed), `inference_clustering.py` opens a
+fresh run instead so nothing is lost, while `scoring.py` skips tracking for that experiment with a
+warning (its scores still go to the CSVs in `evaluation_results/`).

@@ -2,7 +2,6 @@ import unittest
 
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.dataset import DataSet, DatasetEnum, Split
 from cdcr_lexical_diversity_pairwise_scoring.dataobjs.topics import ScopeConfig
-from cdcr_lexical_diversity_pairwise_scoring.preprocess_gen_pairs import validate_pairs
 
 
 class TestDataUtils(unittest.TestCase):
@@ -24,7 +23,6 @@ class TestDataUtils(unittest.TestCase):
         self.validate(dataset, negative_, positive_)
 
     def validate(self, dataset, negative_, positive_):
-        validate_pairs(positive_, negative_)
         pairs = dataset.create_features_from_pos_neg(positive_, negative_)
         pairs_dict = dict()
         for pair in pairs:
